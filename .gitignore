@@ -5,6 +5,7 @@
 **/android/build/
 **/android/.gradle/
 **/ios/build/
+**/ios/.xcode.env.local
 **/node_modules/
 **/.cxx
 

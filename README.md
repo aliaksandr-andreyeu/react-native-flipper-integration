@@ -201,10 +201,10 @@ See `src/extension.ts` for typed documentation.
 
 | Plugin                           | Android | iOS |
 | -------------------------------- | ------- | --- |
-| Layout Inspector                 | ✅      | ✅  |
-| Network (OkHttp / NSURL)         | ✅      | ✅  |
-| SharedPreferences / UserDefaults | —       | ✅  |
-| React DevTools plugin            | —       | ✅  |
+| Layout Inspector                 | Yes     | Yes |
+| Network (OkHttp / NSURL)         | Yes     | Yes |
+| SharedPreferences / UserDefaults | No      | Yes |
+| React DevTools plugin            | No      | Yes |
 
 ---
 
@@ -301,7 +301,9 @@ npm run android
 maestro test .maestro
 ```
 
-CI: **Example Android Build**, **Example iOS Build** (`NO_FLIPPER=1`), and **E2E Android (Maestro)** workflows on GitHub Actions.
+CI: **Example Android Build**, **Example iOS Build** (`NO_FLIPPER=1`), and **E2E Android (Maestro)** (build APK with bundled JS → install on emulator → Maestro, no Metro on the emulator).
+
+CI flow (see workflow): run `npm run bundle:android`, then `assembleDebug`; on a lightweight API 29 emulator only `adb install` + `maestro test` (no Metro).
 
 ---
 
