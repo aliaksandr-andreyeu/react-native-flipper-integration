@@ -1,19 +1,15 @@
 .vscode/
 
 # Dependencies
-node_modules/
-example/android/build/
-example/android/.gradle/
-example/ios/build/
-example/node_modules/
-example/package-lock.json
-.cxx
+**/node_modules/
+**/android/build/
+**/android/.gradle/
+**/ios/build/
+**/node_modules/
+**/.cxx
 
 # Build outputs
 lib/
-android/build/
-android/.gradle/
-ios/build/
 *.xcworkspace
 !default.xcworkspace
 xcuserdata/
