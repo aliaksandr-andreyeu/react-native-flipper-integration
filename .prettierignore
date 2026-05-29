@@ -1,0 +1,9 @@
+.husky/
+.vscode/
+lib/
+node_modules/
+example/node_modules/
+android/
+ios/
+package-lock.json
+example/package-lock.json

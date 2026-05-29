@@ -1,0 +1,16 @@
+appId: com.flipperintegrationexample
+---
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible:
+      id: flipper-example-title
+    timeout: 60000
+- assertVisible:
+    id: flipper-example-title
+- assertVisible:
+    id: flipper-status-enabled
+- assertVisible:
+    id: flipper-status-debug-only
+- assertVisible:
+    text: 'Flipper Integration Example'

@@ -1,0 +1,57 @@
+name: E2E Android (Maestro)
+
+on:
+  pull_request:
+    branches: [main, development]
+  push:
+    branches: [main, development]
+  workflow_dispatch:
+
+jobs:
+  maestro:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install Maestro CLI
+        run: |
+          curl -fsSL "https://get.maestro.mobile.dev" | bash
+          echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          npm run build
+          cd example && npm ci
+
+      - name: Maestro smoke test on emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          script: |
+            set -euxo pipefail
+            cd example
+            npm start -- --port 8081 &
+            METRO_PID=$!
+            trap "kill $METRO_PID || true" EXIT
+            sleep 20
+            adb reverse tcp:8081 tcp:8081
+            chmod +x android/gradlew
+            cd android
+            ./gradlew installDebug -PreactNativeArchitectures=x86_64 --no-daemon
+            cd ..
+            maestro test .maestro

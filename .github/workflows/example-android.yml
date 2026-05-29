@@ -1,0 +1,37 @@
+name: Example Android Build
+
+on:
+  pull_request:
+    branches: [main, development]
+  push:
+    branches: [main, development]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Build library TypeScript
+        run: npm run build
+
+      - name: Install example dependencies
+        run: npm ci
+        working-directory: example
+
+      - name: Assemble example Debug APK (x86_64)
+        working-directory: example/android
+        run: chmod +x gradlew && ./gradlew assembleDebug -PreactNativeArchitectures=x86_64 --no-daemon
