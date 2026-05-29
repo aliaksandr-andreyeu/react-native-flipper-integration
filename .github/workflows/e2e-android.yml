@@ -56,7 +56,7 @@ jobs:
     name: Maestro smoke on emulator
     needs: build-apk
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
 
@@ -71,28 +71,24 @@ jobs:
           curl -fsSL "https://get.maestro.mobile.dev" | bash
           echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
 
+      # android-emulator-runner boots the AVD and runs the script when sys.boot_completed=1.
+      # Use a light profile + long boot timeout (seconds) for software rendering without KVM.
       - name: Maestro smoke test
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 30
-          target: google_apis
+          api-level: 29
+          target: default
           arch: x86_64
-          profile: Nexus 6
-          ram-size: 4096M
+          profile: pixel_4
+          ram-size: 2048M
           heap-size: 512M
-          emulator-boot-timeout-in-minutes: 25
+          emulator-boot-timeout: 1200
+          force-avd-creation: true
           disable-animations: true
-          disable-spell-check: true
-          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-metrics
+          disable-spellchecker: true
+          disable-linux-hw-accel: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -no-metrics
           script: |
             set -euxo pipefail
-            adb kill-server || true
-            adb start-server
-            adb wait-for-device
-            boot_completed=""
-            until [ "$boot_completed" = "1" ]; do
-              boot_completed=$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r') || true
-              sleep 2
-            done
             adb install -r -t "$GITHUB_WORKSPACE/apk/app-debug.apk"
             maestro test "$GITHUB_WORKSPACE/example/.maestro"
