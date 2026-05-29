@@ -1,3 +1,4 @@
+// Auto-starts Flipper on UIApplicationDidFinishLaunchingNotification (debug builds only).
 #import <UIKit/UIKit.h>
 #import "FlipperIntegrationConfig.h"
 

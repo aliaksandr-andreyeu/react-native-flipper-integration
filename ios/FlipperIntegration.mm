@@ -1,3 +1,4 @@
+// Native module: JS API (isEnabled / isDebugOnly / start) + Turbo Module when New Architecture is on.
 #import <React/RCTBridgeModule.h>
 #import <UIKit/UIKit.h>
 #import "FlipperIntegrationConfig.h"

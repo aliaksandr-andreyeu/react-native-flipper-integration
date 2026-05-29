@@ -8,9 +8,9 @@ on:
   workflow_dispatch:
 
 jobs:
-  maestro:
+  build-apk:
+    name: Build example APK (bundled JS)
     runs-on: ubuntu-latest
-    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
 
@@ -24,34 +24,75 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Install Maestro CLI
-        run: |
-          curl -fsSL "https://get.maestro.mobile.dev" | bash
-          echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
-
       - name: Install dependencies
         run: |
           npm ci
           npm run build
           cd example && npm ci
 
-      - name: Maestro smoke test on emulator
+      - name: Bundle JavaScript for Android
+        working-directory: example
+        run: |
+          mkdir -p android/app/src/main/assets
+          npx react-native bundle \
+            --platform android \
+            --dev true \
+            --entry-file index.js \
+            --bundle-output android/app/src/main/assets/index.android.bundle \
+            --assets-dest android/app/src/main/res
+
+      - name: Assemble Debug APK (x86_64)
+        working-directory: example/android
+        run: chmod +x gradlew && ./gradlew assembleDebug -PreactNativeArchitectures=x86_64 --no-daemon
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: example-debug-apk
+          path: example/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+
+  maestro:
+    name: Maestro smoke on emulator
+    needs: build-apk
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download APK
+        uses: actions/download-artifact@v4
+        with:
+          name: example-debug-apk
+          path: apk
+
+      - name: Install Maestro CLI
+        run: |
+          curl -fsSL "https://get.maestro.mobile.dev" | bash
+          echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
+
+      - name: Maestro smoke test
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 34
+          api-level: 30
+          target: google_apis
           arch: x86_64
-          profile: pixel_6
+          profile: Nexus 6
+          ram-size: 4096M
+          heap-size: 512M
+          emulator-boot-timeout-in-minutes: 25
           disable-animations: true
+          disable-spell-check: true
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-metrics
           script: |
             set -euxo pipefail
-            cd example
-            npm start -- --port 8081 &
-            METRO_PID=$!
-            trap "kill $METRO_PID || true" EXIT
-            sleep 20
-            adb reverse tcp:8081 tcp:8081
-            chmod +x android/gradlew
-            cd android
-            ./gradlew installDebug -PreactNativeArchitectures=x86_64 --no-daemon
-            cd ..
-            maestro test .maestro
+            adb kill-server || true
+            adb start-server
+            adb wait-for-device
+            boot_completed=""
+            until [ "$boot_completed" = "1" ]; do
+              boot_completed=$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r') || true
+              sleep 2
+            done
+            adb install -r -t "$GITHUB_WORKSPACE/apk/app-debug.apk"
+            maestro test "$GITHUB_WORKSPACE/example/.maestro"

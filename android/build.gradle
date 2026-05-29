@@ -1,3 +1,6 @@
+// Flipper SDK versions and source sets are controlled via rootProject:
+// FLIPPER_DEBUG_ONLY (default true), NO_FLIPPER=1, FLIPPER_VERSION.
+
 def resolveFlipperDebugOnly() {
   if (rootProject.hasProperty("FLIPPER_DEBUG_ONLY")) {
     return rootProject.property("FLIPPER_DEBUG_ONLY").toString().toBoolean()

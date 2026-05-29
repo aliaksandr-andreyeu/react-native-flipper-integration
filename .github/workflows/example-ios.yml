@@ -32,6 +32,12 @@ jobs:
         run: |
           NO_FLIPPER=1 pod install
 
+      - name: Verify Xcode scheme
+        working-directory: example/ios
+        run: |
+          xcodebuild -workspace FlipperIntegrationExample.xcworkspace -list
+          xcodebuild -workspace FlipperIntegrationExample.xcworkspace -list | grep -q "FlipperIntegrationExample"
+
       - name: Build iOS Simulator app
         working-directory: example/ios
         run: |
