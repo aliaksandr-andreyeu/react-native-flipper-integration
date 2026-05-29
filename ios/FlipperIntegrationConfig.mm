@@ -1,3 +1,4 @@
+// Default Flipper plugins and extension hooks (layout, network, UserDefaults, React).
 #import "FlipperIntegrationConfig.h"
 #import <UIKit/UIKit.h>
 

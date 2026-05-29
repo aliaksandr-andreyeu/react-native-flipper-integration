@@ -52,17 +52,17 @@ jobs:
   all-checks-passed:
     needs: [ci, podspec]
     if: always()
-    name: ✅ All Checks Passed
+    name: All checks passed
     runs-on: ubuntu-latest
     steps:
       - run: |
           FAILED=""
-          # Проверяем каждый нужный джоб
+          # Verify each required job
           if [[ "${{ needs.ci.result }}" != "success" ]]; then
-            FAILED+="lint "
+            FAILED+="ci "
           fi
           if [[ "${{ needs.podspec.result }}" != "success" ]]; then
-            FAILED+="test "
+            FAILED+="podspec "
           fi
 
           if [[ -n "$FAILED" ]]; then

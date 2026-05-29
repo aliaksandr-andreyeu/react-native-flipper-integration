@@ -32,6 +32,17 @@ jobs:
         run: npm ci
         working-directory: example
 
+      - name: Bundle JavaScript for Android
+        working-directory: example
+        run: |
+          mkdir -p android/app/src/main/assets
+          npx react-native bundle \
+            --platform android \
+            --dev true \
+            --entry-file index.js \
+            --bundle-output android/app/src/main/assets/index.android.bundle \
+            --assets-dest android/app/src/main/res
+
       - name: Assemble example Debug APK (x86_64)
         working-directory: example/android
         run: chmod +x gradlew && ./gradlew assembleDebug -PreactNativeArchitectures=x86_64 --no-daemon
