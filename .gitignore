@@ -1,0 +1,32 @@
+.vscode/
+
+# Dependencies
+**/node_modules/
+**/android/build/
+**/android/.gradle/
+**/ios/build/
+**/node_modules/
+**/.cxx
+
+# Build outputs
+lib/
+*.xcworkspace
+!default.xcworkspace
+xcuserdata/
+DerivedData/
+
+# IDE
+.idea/
+*.iml
+.DS_Store
+
+# TypeScript
+*.tsbuildinfo
+
+# Tests
+coverage/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
