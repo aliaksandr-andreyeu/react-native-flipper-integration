@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main, development]
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build library
+        run: npm run build
+
+      - name: Typecheck library
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Prettier check
+        run: npm run format:check
+
+      - name: Unit tests
+        run: npm test -- --coverage
+
+      - name: Install example dependencies
+        run: npm ci
+        working-directory: example
+
+      - name: Typecheck example
+        run: npm run typecheck
+        working-directory: example
+
+  podspec:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate podspec
+        run: pod spec lint FlipperIntegration.podspec --quick --allow-warnings
+
+  all-checks-passed:
+    needs: [ci, podspec]
+    if: always()
+    name: ✅ All Checks Passed
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          FAILED=""
+          # Проверяем каждый нужный джоб
+          if [[ "${{ needs.ci.result }}" != "success" ]]; then
+            FAILED+="lint "
+          fi
+          if [[ "${{ needs.podspec.result }}" != "success" ]]; then
+            FAILED+="test "
+          fi
+
+          if [[ -n "$FAILED" ]]; then
+            echo "The following required jobs failed or were skipped: $FAILED"
+            exit 1
+          fi
+          echo "All required jobs passed!"

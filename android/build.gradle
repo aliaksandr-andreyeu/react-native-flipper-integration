@@ -1,0 +1,74 @@
+def resolveFlipperDebugOnly() {
+  if (rootProject.hasProperty("FLIPPER_DEBUG_ONLY")) {
+    return rootProject.property("FLIPPER_DEBUG_ONLY").toString().toBoolean()
+  }
+  if (project.hasProperty("FLIPPER_DEBUG_ONLY")) {
+    return project.property("FLIPPER_DEBUG_ONLY").toString().toBoolean()
+  }
+  return true
+}
+
+def flipperDebugOnly = resolveFlipperDebugOnly()
+def flipperVersion = rootProject.findProperty("FLIPPER_VERSION") ?: "0.273.0"
+def flipperEnabled = rootProject.findProperty("NO_FLIPPER") != "1"
+
+def flipperDelegateSourceDirs = { boolean isDebug ->
+  if (!flipperEnabled) {
+    return ["src/release/java"]
+  }
+  if (flipperDebugOnly) {
+    return isDebug ? ["src/flipper/java"] : ["src/release/java"]
+  }
+  return ["src/flipper/java"]
+}
+
+apply plugin: "com.android.library"
+apply plugin: "org.jetbrains.kotlin.android"
+apply plugin: "com.facebook.react"
+
+android {
+  namespace "com.flipperintegration"
+  compileSdkVersion rootProject.ext.has("compileSdkVersion") ? rootProject.ext.compileSdkVersion : 36
+
+  defaultConfig {
+    minSdkVersion rootProject.ext.has("minSdkVersion") ? rootProject.ext.minSdkVersion : 24
+    buildConfigField "boolean", "FLIPPER_DEBUG_ONLY", flipperDebugOnly.toString()
+    buildConfigField "boolean", "FLIPPER_ENABLED", flipperEnabled.toString()
+    consumerProguardFiles "consumer-rules.pro"
+  }
+
+  buildFeatures {
+    buildConfig true
+  }
+
+  sourceSets {
+    main {
+      manifest.srcFile "src/main/AndroidManifest.xml"
+      java.srcDirs = ["src/main/java"]
+    }
+    debug {
+      java.srcDirs += flipperDelegateSourceDirs(true)
+    }
+    release {
+      java.srcDirs += flipperDelegateSourceDirs(false)
+    }
+  }
+}
+
+repositories {
+  mavenCentral()
+}
+
+dependencies {
+  implementation "com.facebook.react:react-android"
+
+  if (flipperEnabled) {
+    def flipperDependency = flipperDebugOnly ? "debugImplementation" : "implementation"
+    add(flipperDependency, "com.facebook.flipper:flipper:${flipperVersion}") {
+      exclude group: "com.facebook.fbjni"
+    }
+    add(flipperDependency, "com.facebook.flipper:flipper-network-plugin:${flipperVersion}") {
+      exclude group: "com.facebook.flipper"
+    }
+  }
+}

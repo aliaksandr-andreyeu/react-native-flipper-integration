@@ -1,0 +1,107 @@
+{
+  "name": "react-native-flipper-integration",
+  "version": "1.0.0",
+  "description": "Configurable Flipper integration for React Native (Old + New Architecture)",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "react-native": "src/index.ts",
+  "source": "src/index.ts",
+  "files": [
+    "src",
+    "lib",
+    "android",
+    "ios",
+    "FlipperIntegration.podspec",
+    "react-native.config.js",
+    "app.plugin.js",
+    "README.md",
+    "LICENSE"
+  ],
+  "author": {
+    "name": "Aliaksandr Andreyeu",
+    "email": "andreyeu.aliaksandr@gmail.com"
+  },
+  "license": "MIT",
+  "keywords": [
+    "react-native",
+    "flipper",
+    "debug",
+    "turbo-module",
+    "devtools"
+  ],
+  "bugs": {
+    "url": "https://github.com/aliaksandr-andreyeu/react-native-flipper-integration/issues"
+  },
+  "homepage": "https://github.com/aliaksandr-andreyeu/react-native-flipper-integration#readme",
+  "scripts": {
+    "prepare": "husky",
+    "precommit": "lint-staged",
+    "prepublishOnly": "npm run build",
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write \"./**/*.{js,jsx,cjs,mjs,ts,tsx,json}\"",
+    "format:check": "prettier --check \"./**/*.{js,jsx,cjs,mjs,ts,tsx,json}\"",
+    "test": "jest",
+    "test:coverage": "jest --coverage",
+    "example": "npm --prefix example start",
+    "example:android": "npm --prefix example run android",
+    "example:ios": "npm --prefix example run ios",
+    "example:android:build": "npm --prefix example run android:build",
+    "example:e2e": "npm --prefix example run e2e"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/aliaksandr-andreyeu/react-native-flipper-integration.git"
+  },
+  "peerDependencies": {
+    "react": "*",
+    "react-native": ">=0.73"
+  },
+  "peerDependenciesMeta": {
+    "@expo/config-plugins": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.0",
+    "@expo/config-plugins": "^10.0.0",
+    "@react-native/babel-preset": "0.85.0",
+    "@types/jest": "^30.0.0",
+    "@types/react": "^19.0.0",
+    "babel-jest": "^30.0.0",
+    "jest": "^30.0.0",
+    "eslint": "^9.39.0",
+    "eslint-config-prettier": "^10.1.0",
+    "eslint-plugin-react": "^7.37.0",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "globals": "^16.4.0",
+    "husky": "^9.1.0",
+    "lint-staged": "^16.2.0",
+    "prettier": "^3.6.0",
+    "react": "19.2.3",
+    "react-native": "0.85.0",
+    "typescript": "^5.8.0",
+    "typescript-eslint": "^8.46.0"
+  },
+  "codegenConfig": {
+    "name": "RNFlipperIntegrationSpec",
+    "type": "modules",
+    "jsSrcsDir": "src",
+    "android": {
+      "javaPackageName": "com.flipperintegration"
+    },
+    "ios": {
+      "modulesProvider": {
+        "FlipperIntegration": "FlipperIntegration"
+      }
+    }
+  },
+  "expo": {
+    "name": "react-native-flipper-integration",
+    "plugins": [
+      "./app.plugin.js"
+    ]
+  }
+}
