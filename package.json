@@ -1,6 +1,6 @@
 {
   "name": "react-native-flipper-integration",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Configurable Flipper integration for React Native (Old + New Architecture)",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
