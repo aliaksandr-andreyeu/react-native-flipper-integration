@@ -5,7 +5,7 @@ on:
     branches: [main, development]
 
 concurrency:
-  group: ${{ github.ref }}
+  group: example-ios-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
