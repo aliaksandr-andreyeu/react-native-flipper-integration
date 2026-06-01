@@ -16,7 +16,7 @@
   "dependencies": {
     "react": "19.2.3",
     "react-native": "0.85.0",
-    "react-native-flipper-integration": "github:aliaksandr-andreyeu/react-native-flipper-integration",
+    "react-native-flipper-integration": "file:..",
     "react-native-safe-area-context": "^5.5.2"
   },
   "devDependencies": {
