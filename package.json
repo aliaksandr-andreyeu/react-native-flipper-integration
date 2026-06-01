@@ -34,7 +34,7 @@
   },
   "homepage": "https://github.com/aliaksandr-andreyeu/react-native-flipper-integration#readme",
   "scripts": {
-    "prepare": "husky",
+    "prepare": "npm run build && husky",
     "precommit": "lint-staged",
     "prepublishOnly": "npm run build",
     "build": "tsc",

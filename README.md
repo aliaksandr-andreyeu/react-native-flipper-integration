@@ -301,9 +301,7 @@ npm run android
 maestro test .maestro
 ```
 
-CI: **Example Android Build**, **Example iOS Build** (`NO_FLIPPER=1`), and **E2E Android (Maestro)** (build APK with bundled JS → install on emulator → Maestro, no Metro on the emulator).
-
-CI flow (see workflow): run `npm run bundle:android`, then `assembleDebug`; on a lightweight API 29 emulator only `adb install` + `maestro test` (no Metro).
+CI: **Example Android Build** and **Example iOS Build** (`NO_FLIPPER=1`).
 
 ---
 
