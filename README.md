@@ -6,7 +6,7 @@ Configurable Flipper integration for React Native. Supports **Old Architecture**
 
 ## Tested & verified
 
-This module is actively used with **Flipper Desktop 0.239.0** (Electron **50.0.0**) — the **November 2023** release and the **last Electron build** with full React Native debugging support (Layout, Network, React DevTools, Hermes Debugger). **Everything works as expected** with this setup on React Native 0.85.
+This module is actively used with **Flipper Desktop 0.239.0** (Electron **50.0.0**) - the **November 2023** release and the **last Electron build** with full React Native debugging support (Layout, Network, React DevTools, Hermes Debugger). **Everything works as expected** with this setup on React Native 0.85.
 
 > Flipper 0.239.0 is the recommended desktop version for React Native projects. Later Flipper releases removed Electron artifacts and reduced RN plugin support.
 
@@ -17,12 +17,12 @@ This module is actively used with **Flipper Desktop 0.239.0** (Electron **50.0.0
 | Component                  | Version                                                |
 | -------------------------- | ------------------------------------------------------ |
 | React Native               | ≥ 0.73 (tested on 0.85)                                |
-| Flipper Desktop            | **0.239.0** (Electron **50.0.0**, Nov 2023) — verified |
+| Flipper Desktop            | **0.239.0** (Electron **50.0.0**, Nov 2023) - verified |
 | Android Flipper SDK        | `0.273.0` (default, override with `FLIPPER_VERSION`)   |
 | iOS FlipperKit (CocoaPods) | `0.252.0` (default, override with `FLIPPER_VERSION`)   |
 | Node.js                    | ≥ 22                                                   |
 
-> **Desktop ↔ SDK:** Flipper Desktop **0.239.0** works with the native SDK versions bundled in this module. CocoaPods does not publish FlipperKit `0.273.0` for iOS — the latest available `0.252.0` is used instead.
+> **Desktop ↔ SDK:** Flipper Desktop **0.239.0** works with the native SDK versions bundled in this module. CocoaPods does not publish FlipperKit `0.273.0` for iOS - the latest available `0.252.0` is used instead.
 
 ---
 
@@ -42,7 +42,7 @@ npm install ./react-native-flipper-integration
 npm install react-native-flipper-integration
 ```
 
-Autolinking wires up the module automatically — no manual `Package` / `pod` registration required.
+Autolinking wires up the module automatically - no manual `Package` / `pod` registration required.
 
 ### 2. Android
 
@@ -84,7 +84,7 @@ FLIPPER_VERSION=0.252.0 pod install
 2. Launch Flipper Desktop
 3. Run the app in Debug mode
 
-**Android — port forwarding:**
+**Android - port forwarding:**
 
 ```bash
 adb reverse tcp:8081 tcp:8081
@@ -101,6 +101,32 @@ export default {
 ```
 
 Requires `@expo/config-plugins` (optional peer dependency).
+
+**`expo doctor` / Metro:** use `expo/metro-config`, not `@react-native/metro-config`. Align SDK packages with `npx expo install --check`.
+
+```js
+// metro.config.js (Expo SDK 54+)
+const { getDefaultConfig } = require('expo/metro-config');
+const path = require('path');
+
+const projectRoot = __dirname;
+const config = getDefaultConfig(projectRoot);
+
+// Only when the library is linked from a monorepo (file:..), not for npm/GitHub installs:
+const workspaceRoot = path.resolve(projectRoot, '..');
+config.watchFolders = [...(config.watchFolders ?? []), workspaceRoot];
+config.resolver.nodeModulesPaths = [
+  path.resolve(projectRoot, 'node_modules'),
+  path.resolve(workspaceRoot, 'node_modules')
+];
+
+module.exports = config;
+```
+
+```bash
+npx expo install --check
+npx expo install expo expo-dev-client expo-file-system expo-font expo-linking expo-router @sentry/react-native
+```
 
 ---
 
@@ -121,16 +147,16 @@ NO_FLIPPER=1 pod install        # iOS
 NO_FLIPPER=1 ./gradlew assembleDebug
 ```
 
-When `NO_FLIPPER=1`, native builds use a no-op delegate — no Flipper SDK on the classpath.
+When `NO_FLIPPER=1`, native builds use a no-op delegate - no Flipper SDK on the classpath.
 
-### Android — override from CLI
+### Android - override from CLI
 
 ```bash
 ./gradlew assembleDebug -PFLIPPER_DEBUG_ONLY=false
 ./gradlew assembleRelease -PFLIPPER_DEBUG_ONLY=false
 ```
 
-### iOS — override at pod install
+### iOS - override at pod install
 
 ```bash
 FLIPPER_DEBUG_ONLY=false pod install
@@ -144,8 +170,8 @@ FLIPPER_DEBUG_ONLY=false pod install
 
 Flipper starts **automatically** when the app launches:
 
-- **Android** — when the `FlipperIntegration` native module is created (idempotent)
-- **iOS** — via `UIApplicationDidFinishLaunchingNotification` (observer removed after first fire)
+- **Android** - when the `FlipperIntegration` native module is created (idempotent)
+- **iOS** - via `UIApplicationDidFinishLaunchingNotification` (observer removed after first fire)
 
 No extra code in `AppDelegate` / `MainApplication` is **required**.
 
@@ -160,7 +186,7 @@ if (isFlipperEnabled()) {
 
 console.log('Debug only:', isFlipperDebugOnly());
 
-// Idempotent — safe to call; native init runs once per process
+// Idempotent - safe to call; native init runs once per process
 initializeFlipper();
 ```
 
@@ -258,7 +284,7 @@ npm test             # Jest unit tests
 npm run test:coverage
 ```
 
-**Unit tests (Jest):** JS API (`src/index.ts`) — Turbo Module / NativeModules fallback / linking error; Expo plugin (`app.plugin.js`) — `FLIPPER_DEBUG_ONLY` and `NO_FLIPPER`.
+**Unit tests (Jest):** JS API (`src/index.ts`) - Turbo Module / NativeModules fallback / linking error; Expo plugin (`app.plugin.js`) - `FLIPPER_DEBUG_ONLY` and `NO_FLIPPER`.
 
 Pre-commit runs **lint-staged**: ESLint fix + Prettier on staged `*.{js,ts,tsx}` and Prettier on `*.{json,md,yml}`.
 
