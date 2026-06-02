@@ -1,4 +1,8 @@
-const { withGradleProperties, createGradlePropertiesItem } = require('@expo/config-plugins');
+const { withGradleProperties } = require('@expo/config-plugins');
+
+function createProperty(key, value) {
+  return { type: 'property', key, value };
+}
 
 /**
  * Expo config plugin for react-native-flipper-integration.
@@ -29,10 +33,10 @@ function withFlipperIntegration(config, options = {}) {
       (item) => item.type !== 'property' || (!item.key?.startsWith('FLIPPER_') && item.key !== 'NO_FLIPPER')
     );
 
-    filtered.push(createGradlePropertiesItem('FLIPPER_DEBUG_ONLY', String(flipperDebugOnly)));
+    filtered.push(createProperty('FLIPPER_DEBUG_ONLY', String(flipperDebugOnly)));
 
     if (noFlipper) {
-      filtered.push(createGradlePropertiesItem('NO_FLIPPER', '1'));
+      filtered.push(createProperty('NO_FLIPPER', '1'));
     }
 
     if (isModObject) {
