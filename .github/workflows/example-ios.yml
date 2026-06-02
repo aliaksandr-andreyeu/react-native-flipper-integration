@@ -3,6 +3,7 @@ name: Example iOS Build
 on:
   pull_request:
     branches: [main, development]
+  workflow_dispatch:
 
 concurrency:
   group: example-ios-${{ github.ref }}
