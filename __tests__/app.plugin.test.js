@@ -1,9 +1,3 @@
-const mockCreateGradlePropertiesItem = jest.fn((key, value) => ({
-  type: 'property',
-  key,
-  value
-}));
-
 const mockWithGradleProperties = jest.fn((config, modifier) => {
   const gradleProperties = [
     { type: 'property', key: 'FLIPPER_DEBUG_ONLY', value: 'stale' },
@@ -17,8 +11,7 @@ const mockWithGradleProperties = jest.fn((config, modifier) => {
 });
 
 jest.mock('@expo/config-plugins', () => ({
-  withGradleProperties: (...args) => mockWithGradleProperties(...args),
-  createGradlePropertiesItem: (...args) => mockCreateGradlePropertiesItem(...args)
+  withGradleProperties: (...args) => mockWithGradleProperties(...args)
 }));
 
 const withFlipperIntegration = require('../app.plugin');
@@ -35,9 +28,6 @@ describe('withFlipperIntegration expo plugin', () => {
 
     const gradleProperties = mockWithGradleProperties.mock.results[0].value.gradleProperties;
 
-    expect(mockCreateGradlePropertiesItem).toHaveBeenCalledWith('FLIPPER_DEBUG_ONLY', 'true');
-    expect(mockCreateGradlePropertiesItem).not.toHaveBeenCalledWith('NO_FLIPPER', '1');
-
     const propertyKeys = gradleProperties.filter((item) => item.type === 'property').map((item) => item.key);
 
     expect(propertyKeys).toContain('FLIPPER_DEBUG_ONLY');
@@ -45,19 +35,29 @@ describe('withFlipperIntegration expo plugin', () => {
     expect(propertyKeys.filter((key) => key === 'NO_FLIPPER')).toHaveLength(0);
 
     const flipperDebugOnly = gradleProperties.find((item) => item.key === 'FLIPPER_DEBUG_ONLY');
-    expect(flipperDebugOnly?.value).toBe('true');
+    expect(flipperDebugOnly).toEqual({ type: 'property', key: 'FLIPPER_DEBUG_ONLY', value: 'true' });
   });
 
   it('sets FLIPPER_DEBUG_ONLY=false when flipperDebugOnly option is false', () => {
     withFlipperIntegration({}, { flipperDebugOnly: false });
 
-    expect(mockCreateGradlePropertiesItem).toHaveBeenCalledWith('FLIPPER_DEBUG_ONLY', 'false');
+    const gradleProperties = mockWithGradleProperties.mock.results[0].value.gradleProperties;
+    expect(gradleProperties.find((item) => item.key === 'FLIPPER_DEBUG_ONLY')).toEqual({
+      type: 'property',
+      key: 'FLIPPER_DEBUG_ONLY',
+      value: 'false'
+    });
   });
 
   it('adds NO_FLIPPER when noFlipper option is true', () => {
     withFlipperIntegration({}, { noFlipper: true });
 
-    expect(mockCreateGradlePropertiesItem).toHaveBeenCalledWith('NO_FLIPPER', '1');
+    const gradleProperties = mockWithGradleProperties.mock.results[0].value.gradleProperties;
+    expect(gradleProperties.find((item) => item.key === 'NO_FLIPPER')).toEqual({
+      type: 'property',
+      key: 'NO_FLIPPER',
+      value: '1'
+    });
   });
 
   it('supports legacy modifier that receives the array directly', () => {
