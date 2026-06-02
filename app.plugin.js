@@ -14,24 +14,36 @@ function withFlipperIntegration(config, options = {}) {
   const flipperDebugOnly = options.flipperDebugOnly !== false;
   const noFlipper = options.noFlipper === true;
 
-  config = withGradleProperties(config, (gradleProperties) => {
+  return withGradleProperties(config, (configWithProps) => {
+    const isModObject = Array.isArray(configWithProps?.modResults);
+    const gradleProperties = isModObject ? configWithProps.modResults : configWithProps;
+
+    if (!Array.isArray(gradleProperties)) {
+      throw new Error(
+        'react-native-flipper-integration: withGradleProperties received an unexpected argument. ' +
+          'Update to the latest version of this package.'
+      );
+    }
+
     const filtered = gradleProperties.filter(
       (item) => item.type !== 'property' || (!item.key?.startsWith('FLIPPER_') && item.key !== 'NO_FLIPPER')
     );
 
-    gradleProperties.length = 0;
-    gradleProperties.push(...filtered);
-
-    gradleProperties.push(createGradlePropertiesItem('FLIPPER_DEBUG_ONLY', String(flipperDebugOnly)));
+    filtered.push(createGradlePropertiesItem('FLIPPER_DEBUG_ONLY', String(flipperDebugOnly)));
 
     if (noFlipper) {
-      gradleProperties.push(createGradlePropertiesItem('NO_FLIPPER', '1'));
+      filtered.push(createGradlePropertiesItem('NO_FLIPPER', '1'));
     }
 
+    if (isModObject) {
+      configWithProps.modResults = filtered;
+      return configWithProps;
+    }
+
+    gradleProperties.length = 0;
+    gradleProperties.push(...filtered);
     return gradleProperties;
   });
-
-  return config;
 }
 
 module.exports = withFlipperIntegration;

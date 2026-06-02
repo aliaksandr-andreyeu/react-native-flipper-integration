@@ -11,8 +11,9 @@ const mockWithGradleProperties = jest.fn((config, modifier) => {
     { type: 'property', key: 'OTHER_PROP', value: 'keep' },
     { type: 'comment', key: null, value: '# comment' }
   ];
-  modifier(gradleProperties);
-  return { ...config, gradleProperties };
+  const configWithProps = { name: 'test-app', modResults: gradleProperties };
+  modifier(configWithProps);
+  return { ...config, gradleProperties: configWithProps.modResults };
 });
 
 jest.mock('@expo/config-plugins', () => ({
@@ -57,5 +58,18 @@ describe('withFlipperIntegration expo plugin', () => {
     withFlipperIntegration({}, { noFlipper: true });
 
     expect(mockCreateGradlePropertiesItem).toHaveBeenCalledWith('NO_FLIPPER', '1');
+  });
+
+  it('supports legacy modifier that receives the array directly', () => {
+    mockWithGradleProperties.mockImplementationOnce((config, modifier) => {
+      const gradleProperties = [{ type: 'property', key: 'OTHER_PROP', value: 'keep' }];
+      modifier(gradleProperties);
+      return { ...config, gradleProperties };
+    });
+
+    withFlipperIntegration({ name: 'legacy-app' });
+
+    const gradleProperties = mockWithGradleProperties.mock.results.at(-1).value.gradleProperties;
+    expect(gradleProperties.find((item) => item.key === 'FLIPPER_DEBUG_ONLY')?.value).toBe('true');
   });
 });

@@ -102,6 +102,32 @@ export default {
 
 Requires `@expo/config-plugins` (optional peer dependency).
 
+**`expo doctor` / Metro:** use `expo/metro-config`, not `@react-native/metro-config`. Align SDK packages with `npx expo install --check`.
+
+```js
+// metro.config.js (Expo SDK 54+)
+const { getDefaultConfig } = require('expo/metro-config');
+const path = require('path');
+
+const projectRoot = __dirname;
+const config = getDefaultConfig(projectRoot);
+
+// Only when the library is linked from a monorepo (file:..), not for npm/GitHub installs:
+const workspaceRoot = path.resolve(projectRoot, '..');
+config.watchFolders = [...(config.watchFolders ?? []), workspaceRoot];
+config.resolver.nodeModulesPaths = [
+  path.resolve(projectRoot, 'node_modules'),
+  path.resolve(workspaceRoot, 'node_modules')
+];
+
+module.exports = config;
+```
+
+```bash
+npx expo install --check
+npx expo install expo expo-dev-client expo-file-system expo-font expo-linking expo-router @sentry/react-native
+```
+
 ---
 
 ## `FLIPPER_DEBUG_ONLY` configuration
