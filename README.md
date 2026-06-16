@@ -16,7 +16,7 @@ This module is actively used with **Flipper Desktop 0.239.0** (Electron **50.0.0
 
 | Component                  | Version                                                |
 | -------------------------- | ------------------------------------------------------ |
-| React Native               | ≥ 0.73 (tested on 0.85)                                |
+| React Native               | ≥ 0.74 (tested on 0.85)                                |
 | Flipper Desktop            | **0.239.0** (Electron **50.0.0**, Nov 2023) - verified |
 | Android Flipper SDK        | `0.273.0` (default, override with `FLIPPER_VERSION`)   |
 | iOS FlipperKit (CocoaPods) | `0.252.0` (default, override with `FLIPPER_VERSION`)   |
@@ -231,6 +231,8 @@ See `src/extension.ts` for typed documentation.
 | Network (OkHttp / NSURL)         | Yes     | Yes |
 | SharedPreferences / UserDefaults | No      | Yes |
 | React DevTools plugin            | No      | Yes |
+
+> **Android network plugin limitation:** to capture traffic, the module calls `NetworkingModule.setCustomClientBuilder` (debug builds only). This is a global hook — if your app or another library already sets a custom OkHttp client builder, registering Flipper will replace it. If you need your own builder, add the Flipper interceptor inside it yourself instead of relying on the default integration.
 
 ---
 

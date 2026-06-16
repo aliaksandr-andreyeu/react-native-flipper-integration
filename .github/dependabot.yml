@@ -14,3 +14,9 @@ updates:
 
       - dependency-name: 'react-native'
         update-types: ['version-update:semver-major', 'version-update:semver-minor', 'version-update:semver-patch']
+
+  - package-ecosystem: 'github-actions'
+    directory: '/'
+    target-branch: 'development'
+    schedule:
+      interval: 'weekly'

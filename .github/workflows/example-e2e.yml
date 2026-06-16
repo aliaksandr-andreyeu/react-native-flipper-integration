@@ -1,0 +1,80 @@
+name: Example E2E (Maestro)
+
+on:
+  pull_request:
+    branches: [main, development]
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+concurrency:
+  group: example-e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  maestro:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Build library TypeScript
+        run: npm run build
+
+      - name: Install example dependencies
+        run: npm ci
+        working-directory: example
+
+      - name: Bundle JavaScript for Android
+        working-directory: example
+        run: |
+          mkdir -p android/app/src/main/assets
+          npx react-native bundle \
+            --platform android \
+            --dev true \
+            --entry-file index.js \
+            --bundle-output android/app/src/main/assets/index.android.bundle \
+            --assets-dest android/app/src/main/res
+
+      - name: Assemble example Debug APK (x86_64)
+        working-directory: example/android
+        run: chmod +x gradlew && ./gradlew assembleDebug -PreactNativeArchitectures=x86_64 --no-daemon
+
+      - name: Install Maestro
+        run: |
+          curl -fsSL "https://get.maestro.mobile.dev" | bash
+          echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
+
+      - name: Run Maestro smoke test on emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          force-avd-creation: false
+          disable-animations: true
+          emulator-options: -no-snapshot -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect
+          script: |
+            adb install -r example/android/app/build/outputs/apk/debug/app-debug.apk
+            maestro test example/.maestro/smoke.yaml

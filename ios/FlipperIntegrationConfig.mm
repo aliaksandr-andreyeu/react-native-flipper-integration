@@ -36,19 +36,12 @@ static NSMutableArray<FlipperIntegrationPluginSetupBlock> *FlipperIntegrationPlu
 
 BOOL FlipperIntegrationShouldEnable(void)
 {
-#if !FLIPPER_ENABLED
-  return NO;
-#endif
-
-#if FLIPPER_DEBUG_ONLY
 #if DEBUG
-  return YES;
+  BOOL isDebug = YES;
 #else
-  return NO;
+  BOOL isDebug = NO;
 #endif
-#else
-  return YES;
-#endif
+  return FlipperIntegrationResolveShouldEnable(FLIPPER_ENABLED, FLIPPER_DEBUG_ONLY, isDebug);
 }
 
 BOOL FlipperIntegrationIsDebugOnly(void)

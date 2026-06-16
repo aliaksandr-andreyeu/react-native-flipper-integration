@@ -8,6 +8,10 @@ object FlipperIntegration {
   private val initialized = AtomicBoolean(false)
   private val pluginInitializers = CopyOnWriteArrayList<(Any) -> Unit>()
 
+  // Swappable so unit tests can inject a fake delegate without touching the Flipper SDK.
+  // Production always uses the source-set-selected FlipperIntegrationDelegateImpl (flipper/release).
+  internal var delegate: FlipperIntegrationDelegate = FlipperIntegrationDelegateImpl()
+
   fun shouldEnable(context: Context): Boolean {
     if (!BuildConfig.FLIPPER_ENABLED) {
       return false
@@ -17,7 +21,7 @@ object FlipperIntegration {
       return false
     }
 
-    return FlipperIntegrationDelegate.shouldEnable(context)
+    return delegate.shouldEnable(context)
   }
 
   /**
@@ -38,23 +42,18 @@ object FlipperIntegration {
       return
     }
 
-    FlipperIntegrationDelegate.initialize(context, pluginInitializers)
+    delegate.initialize(context, pluginInitializers)
+  }
+
+  /** Test-only: restore a clean state and swap in a fake delegate. */
+  internal fun resetForTests(testDelegate: FlipperIntegrationDelegate) {
+    initialized.set(false)
+    pluginInitializers.clear()
+    delegate = testDelegate
   }
 }
 
 interface FlipperIntegrationDelegate {
   fun shouldEnable(context: Context): Boolean
   fun initialize(context: Context, pluginInitializers: List<(Any) -> Unit>)
-
-  companion object {
-    private val instance: FlipperIntegrationDelegate by lazy {
-      FlipperIntegrationDelegateImpl()
-    }
-
-    fun shouldEnable(context: Context): Boolean = instance.shouldEnable(context)
-
-    fun initialize(context: Context, pluginInitializers: List<(Any) -> Unit>) {
-      instance.initialize(context, pluginInitializers)
-    }
-  }
 }

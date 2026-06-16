@@ -1,6 +1,6 @@
 {
   "name": "react-native-flipper-integration",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "Configurable Flipper integration for React Native (Old + New Architecture)",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
@@ -15,6 +15,7 @@
     "react-native.config.js",
     "app.plugin.js",
     "README.md",
+    "CHANGELOG.md",
     "LICENSE"
   ],
   "author": {
@@ -22,6 +23,9 @@
     "email": "andreyeu.aliaksandr@gmail.com"
   },
   "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  },
   "keywords": [
     "react-native",
     "flipper",
@@ -57,7 +61,7 @@
   },
   "peerDependencies": {
     "react": "*",
-    "react-native": ">=0.73"
+    "react-native": ">=0.74"
   },
   "peerDependenciesMeta": {
     "@expo/config-plugins": {

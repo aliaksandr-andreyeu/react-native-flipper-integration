@@ -1,5 +1,5 @@
 import { NativeModules, Platform } from 'react-native';
-import NativeFlipperIntegration from './NativeFlipperIntegration';
+import NativeFlipperIntegration, { type Spec } from './NativeFlipperIntegration';
 
 const LINKING_ERROR =
   "The package 'react-native-flipper-integration' doesn't seem to be linked. Make sure: \n\n" +
@@ -7,13 +7,7 @@ const LINKING_ERROR =
   '- You rebuilt the app after installing the package\n' +
   '- FLIPPER_DEBUG_ONLY is configured in gradle.properties / ENV for iOS\n';
 
-type FlipperIntegrationModule = {
-  isEnabled: () => boolean;
-  isDebugOnly: () => boolean;
-  start: () => void;
-};
-
-const FlipperIntegrationModule: FlipperIntegrationModule =
+const FlipperIntegrationModule: Spec =
   NativeFlipperIntegration ??
   NativeModules.FlipperIntegration ??
   new Proxy(

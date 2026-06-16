@@ -11,6 +11,21 @@ NS_ASSUME_NONNULL_BEGIN
 /** Called with FlipperClient* when FlipperKit is linked. */
 typedef void (^FlipperIntegrationPluginSetupBlock)(id client);
 
+/**
+ * Pure gating logic, free of UIKit and build-time flags, so it can be unit-tested
+ * on the host. FlipperIntegrationShouldEnable() feeds the compile-time flags into it.
+ */
+static inline BOOL FlipperIntegrationResolveShouldEnable(BOOL enabled, BOOL debugOnly, BOOL isDebug)
+{
+  if (!enabled) {
+    return NO;
+  }
+  if (debugOnly && !isDebug) {
+    return NO;
+  }
+  return YES;
+}
+
 /** Whether Flipper should run in the current build (FLIPPER_ENABLED / FLIPPER_DEBUG_ONLY). */
 BOOL FlipperIntegrationShouldEnable(void);
 
