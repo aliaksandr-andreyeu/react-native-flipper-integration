@@ -9,13 +9,13 @@
 NS_ASSUME_NONNULL_BEGIN
 
 /** Called with FlipperClient* when FlipperKit is linked. */
-typedef void (^FlipperIntegrationPluginSetupBlock)(id client);
+typedef void (^ReactNativeFlipperKitPluginSetupBlock)(id client);
 
 /**
  * Pure gating logic, free of UIKit and build-time flags, so it can be unit-tested
- * on the host. FlipperIntegrationShouldEnable() feeds the compile-time flags into it.
+ * on the host. ReactNativeFlipperKitShouldEnable() feeds the compile-time flags into it.
  */
-static inline BOOL FlipperIntegrationResolveShouldEnable(BOOL enabled, BOOL debugOnly, BOOL isDebug)
+static inline BOOL ReactNativeFlipperKitResolveShouldEnable(BOOL enabled, BOOL debugOnly, BOOL isDebug)
 {
   if (!enabled) {
     return NO;
@@ -27,15 +27,19 @@ static inline BOOL FlipperIntegrationResolveShouldEnable(BOOL enabled, BOOL debu
 }
 
 /** Whether Flipper should run in the current build (FLIPPER_ENABLED / FLIPPER_DEBUG_ONLY). */
-BOOL FlipperIntegrationShouldEnable(void);
+BOOL ReactNativeFlipperKitShouldEnable(void);
 
 /** Mirrors FLIPPER_DEBUG_ONLY at build time. */
-BOOL FlipperIntegrationIsDebugOnly(void);
+BOOL ReactNativeFlipperKitIsDebugOnly(void);
+
+/** Whether Flipper auto-starts on app launch (FLIPPER_AUTO_INIT). When NO, the app must
+ *  call initializeFlipper() from JS. */
+BOOL ReactNativeFlipperKitIsAutoInitEnabled(void);
 
 /** Register a custom plugin before the client starts. Safe to call from AppDelegate early. */
-void FlipperIntegrationRegisterPluginSetup(FlipperIntegrationPluginSetupBlock block);
+void ReactNativeFlipperKitRegisterPluginSetup(ReactNativeFlipperKitPluginSetupBlock block);
 
 /** Start Flipper with default plugins. Idempotent — runs once per process. */
-void FlipperIntegrationInitialize(UIApplication *application);
+void ReactNativeFlipperKitInitialize(UIApplication *application);
 
 NS_ASSUME_NONNULL_END

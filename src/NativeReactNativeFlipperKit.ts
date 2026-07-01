@@ -6,4 +6,4 @@ export interface Spec extends TurboModule {
   start(): void;
 }
 
-export default TurboModuleRegistry.get<Spec>('FlipperIntegration');
+export default TurboModuleRegistry.get<Spec>('ReactNativeFlipperKit');

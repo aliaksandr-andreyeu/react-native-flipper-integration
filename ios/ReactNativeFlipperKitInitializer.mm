@@ -1,15 +1,21 @@
-// Auto-starts Flipper on UIApplicationDidFinishLaunchingNotification (debug builds only).
+// Auto-starts Flipper on UIApplicationDidFinishLaunchingNotification (debug builds only,
+// and only when FLIPPER_AUTO_INIT is enabled).
 #import <UIKit/UIKit.h>
-#import "FlipperIntegrationConfig.h"
+#import "ReactNativeFlipperKitConfig.h"
 
-@interface FlipperIntegrationInitializer : NSObject
+@interface ReactNativeFlipperKitInitializer : NSObject
 @end
 
-@implementation FlipperIntegrationInitializer
+@implementation ReactNativeFlipperKitInitializer
 
 + (void)load
 {
-  if (!FlipperIntegrationShouldEnable()) {
+  // Skip auto-start when FLIPPER_AUTO_INIT is off — the app drives init via initializeFlipper().
+  if (!ReactNativeFlipperKitIsAutoInitEnabled()) {
+    return;
+  }
+
+  if (!ReactNativeFlipperKitShouldEnable()) {
     return;
   }
 
@@ -30,7 +36,7 @@
     application = [UIApplication sharedApplication];
   }
 
-  FlipperIntegrationInitialize(application);
+  ReactNativeFlipperKitInitialize(application);
 }
 
 @end
