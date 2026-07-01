@@ -12,11 +12,11 @@ export default tseslint.config(
       '.vscode/**',
       'lib/**',
       'node_modules/**',
-      'example/node_modules/**',
+      'examples/*/node_modules/**',
       'android/**',
       'ios/**',
-      'example/android/**',
-      'example/ios/**',
+      'examples/*/android/**',
+      'examples/*/ios/**',
       '**/*.d.ts',
       'coverage/**'
     ]
@@ -34,7 +34,7 @@ export default tseslint.config(
     }
   },
   {
-    files: ['src/**/*.{ts,tsx}', 'example/**/*.{ts,tsx}'],
+    files: ['src/**/*.{ts,tsx}', 'examples/**/*.{ts,tsx}'],
     plugins: {
       react: pluginReact,
       'react-hooks': pluginReactHooks

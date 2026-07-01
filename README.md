@@ -1,4 +1,4 @@
-# react-native-flipper-integration
+# react-native-flipper-kit
 
 Configurable Flipper integration for React Native. Supports **Old Architecture** (Native Modules) and **New Architecture** (Turbo Modules / codegen).
 
@@ -20,7 +20,7 @@ This module is actively used with **Flipper Desktop 0.239.0** (Electron **50.0.0
 | Flipper Desktop            | **0.239.0** (Electron **50.0.0**, Nov 2023) - verified |
 | Android Flipper SDK        | `0.273.0` (default, override with `FLIPPER_VERSION`)   |
 | iOS FlipperKit (CocoaPods) | `0.252.0` (default, override with `FLIPPER_VERSION`)   |
-| Node.js                    | ≥ 22                                                   |
+| Node.js                    | ≥ 20 to consume; development pins 24 (`.nvmrc`)        |
 
 > **Desktop ↔ SDK:** Flipper Desktop **0.239.0** works with the native SDK versions bundled in this module. CocoaPods does not publish FlipperKit `0.273.0` for iOS - the latest available `0.252.0` is used instead.
 
@@ -33,13 +33,13 @@ This module is actively used with **Flipper Desktop 0.239.0** (Electron **50.0.0
 **Local path (monorepo / boilerplate):**
 
 ```bash
-npm install ./react-native-flipper-integration
+npm install ./react-native-flipper-kit
 ```
 
 **From npm (if published):**
 
 ```bash
-npm install react-native-flipper-integration
+npm install react-native-flipper-kit
 ```
 
 Autolinking wires up the module automatically - no manual `Package` / `pod` registration required.
@@ -78,6 +78,25 @@ Optional SDK override:
 FLIPPER_VERSION=0.252.0 pod install
 ```
 
+> **Xcode 16 / macOS Sequoia build error** — `static assertion failed … std::is_trivial<folly::detail::AccessSpreaderBase::GlobalState>`. `Flipper-Folly 2.6.x` (pulled in by FlipperKit) predates folly's switch from `is_trivial` to `is_trivially_destructible`, and the type is no longer "trivial" under the C++20 toolchain. Patch the pinned header from your **Podfile `post_install`** (it is regenerated on every `pod install`):
+>
+> ```ruby
+> post_install do |installer|
+>   react_native_post_install(installer, config[:reactNativePath], :mac_catalyst_enabled => false)
+>
+>   cache_locality = File.join(installer.sandbox.root, 'Flipper-Folly', 'folly', 'concurrency', 'CacheLocality.h')
+>   if File.exist?(cache_locality)
+>     text = File.read(cache_locality)
+>     patched = text.gsub('std::is_trivial<GlobalState>::value', 'std::is_trivially_destructible<GlobalState>::value')
+>     File.write(cache_locality, patched) if patched != text
+>   end
+> end
+> ```
+>
+> The example apps already include this. It mirrors folly's own upstream fix and is a no-op once patched.
+
+> **Xcode 16 `Sandbox: rsync … deny … _CodeSignature`** when embedding pod frameworks — Xcode 16 defaults **User Script Sandboxing** to `YES`, which blocks the `[CP] Embed Pods Frameworks` phase. Set **`ENABLE_USER_SCRIPT_SANDBOXING = NO`** on the app target (Build Settings → "User Script Sandboxing" → No). The example apps already have this.
+
 ### 4. Flipper Desktop
 
 1. Download [Flipper 0.239.0](https://github.com/facebook/flipper/releases/tag/v0.239.0)
@@ -96,7 +115,7 @@ adb reverse tcp:8097 tcp:8097
 ```js
 // app.config.js
 export default {
-  plugins: [['react-native-flipper-integration', { flipperDebugOnly: true }]]
+  plugins: [['react-native-flipper-kit', { flipperDebugOnly: true }]]
 };
 ```
 
@@ -170,25 +189,56 @@ FLIPPER_DEBUG_ONLY=false pod install
 
 Flipper starts **automatically** when the app launches:
 
-- **Android** - when the `FlipperIntegration` native module is created (idempotent)
+- **Android** - when the `ReactNativeFlipperKit` native module is created (idempotent)
 - **iOS** - via `UIApplicationDidFinishLaunchingNotification` (observer removed after first fire)
 
 No extra code in `AppDelegate` / `MainApplication` is **required**.
 
+### Manual initialization (`FLIPPER_AUTO_INIT=false`)
+
+Set the build flag **`FLIPPER_AUTO_INIT=false`** to disable auto-start and drive init from JS instead — useful to control _when_ Flipper starts (after user consent, a remote flag, choosing an environment). The native side then does nothing until you call `initializeFlipper()`:
+
+```ts
+import { initializeFlipper } from 'react-native-flipper-kit';
+
+// e.g. once you've decided Flipper should run
+initializeFlipper(); // idempotent
+```
+
+Configure it the same way as the other flags:
+
+```properties
+# Android — android/gradle.properties (or -PFLIPPER_AUTO_INIT=false)
+FLIPPER_AUTO_INIT=false
+```
+
+```bash
+# iOS
+FLIPPER_AUTO_INIT=false pod install
+```
+
+```js
+// Expo — app config plugin
+plugins: [['react-native-flipper-kit', { flipperAutoInit: false }]];
+```
+
+> On Android with the New Architecture, calling `initializeFlipper()` also guarantees the native TurboModule is constructed (it is created lazily, so an app that never touches the JS API would otherwise never start Flipper).
+
 ### JavaScript / TypeScript API
 
 ```typescript
-import { initializeFlipper, isFlipperEnabled, isFlipperDebugOnly } from 'react-native-flipper-integration';
+import { isFlipperEnabled, isFlipperDebugOnly } from 'react-native-flipper-kit';
 
 if (isFlipperEnabled()) {
   console.log('Flipper is available');
 }
 
 console.log('Debug only:', isFlipperDebugOnly());
-
-// Idempotent - safe to call; native init runs once per process
-initializeFlipper();
 ```
+
+> **`isFlipperDebugOnly()` reflects the build-time `FLIPPER_DEBUG_ONLY` flag, not the runtime state.** It is independent of `isFlipperEnabled()` — with `NO_FLIPPER=1` you can see `enabled: false` while `debugOnly: true`. Use `isFlipperEnabled()` to gate behavior.
+
+> **`initializeFlipper()`** is idempotent. With the default auto-init it is redundant (and if you call it, do so from an effect, not during render). With **`FLIPPER_AUTO_INIT=false`** it is the explicit entry point — see [Manual initialization](#manual-initialization-flipper_auto_init false) above.
 
 Old Architecture uses `NativeModules` fallback; New Architecture uses the codegen Turbo Module (`TurboModuleRegistry.get`, not `getEnforcing`).
 
@@ -199,10 +249,10 @@ Register **before** the first Flipper start (early `Application` / `AppDelegate`
 **Android (Kotlin):**
 
 ```kotlin
-import com.flipperintegration.FlipperIntegration
+import dev.cycleport.flipperkit.ReactNativeFlipperKit
 import com.facebook.flipper.android.AndroidFlipperClient
 
-FlipperIntegration.addPluginInitializer { client ->
+ReactNativeFlipperKit.addPluginInitializer { client ->
   client as AndroidFlipperClient
   client.addPlugin(MyFlipperPlugin())
 }
@@ -211,26 +261,36 @@ FlipperIntegration.addPluginInitializer { client ->
 **iOS (Objective-C):**
 
 ```objc
-#import "FlipperIntegrationConfig.h"
+#import "ReactNativeFlipperKitConfig.h"
 
-FlipperIntegrationRegisterPluginSetup(^(id client) {
+ReactNativeFlipperKitRegisterPluginSetup(^(id client) {
   FlipperClient *flipperClient = (FlipperClient *)client;
   [flipperClient addPlugin:[[MyFlipperPlugin alloc] init]];
 });
 ```
 
-See `src/extension.ts` for typed documentation.
+See [`ios/ReactNativeFlipperKitConfig.h`](ios/ReactNativeFlipperKitConfig.h) and `ReactNativeFlipperKit.addPluginInitializer` (Android) for the native registration hooks.
 
 ---
 
 ## Included out of the box
 
-| Plugin                           | Android | iOS |
-| -------------------------------- | ------- | --- |
-| Layout Inspector                 | Yes     | Yes |
-| Network (OkHttp / NSURL)         | Yes     | Yes |
-| SharedPreferences / UserDefaults | No      | Yes |
-| React DevTools plugin            | No      | Yes |
+| Plugin                           | Android | iOS             |
+| -------------------------------- | ------- | --------------- |
+| Layout Inspector                 | Yes     | Yes             |
+| Network (OkHttp / NSURL)         | Yes     | Yes             |
+| SharedPreferences / UserDefaults | Yes     | Yes             |
+| Databases (SQLite)               | Yes     | No              |
+| React DevTools plugin            | No      | Yes             |
+| LeakCanary (memory leaks)        | Yes     | No              |
+| Crash Reporter                   | Yes     | No              |
+| Logs                             | logcat¹ | device console¹ |
+
+> ¹ **Logs** is not a device-side plugin — Flipper Desktop reads `adb logcat` (Android) and the iOS device console directly, so any `Log.*` / `os_log` / `console.*` output appears in the Logs tab with no module wiring. **Crash Reporter** on Android is wired in the module (a global uncaught-exception handler forwards crashes to the `CrashReporter` tab); FlipperKit ships no iOS crash plugin, so on iOS a forced crash surfaces in Xcode/console only.
+
+> **Databases / SharedPreferences (Android):** both ship in the core Flipper artifact (no extra dependency). Databases auto-discovers the app's SQLite files; SharedPreferences inspects the default prefs file (named after the package). To expose additional prefs files or custom DB drivers, register your own plugin instance via `addPluginInitializer`.
+
+> **LeakCanary (Android):** bundles `com.squareup.leakcanary:leakcanary-android` (debug-only by default) and the Flipper `flipper-leakcanary2-plugin`. LeakCanary auto-installs via its own `ContentProvider` and detects leaks on its own; the module registers a `FlipperLeakEventListener` that forwards each completed heap analysis to the Flipper "LeakCanary" tab. Override the LeakCanary version with the `LEAKCANARY_VERSION` Gradle property.
 
 > **Android network plugin limitation:** to capture traffic, the module calls `NetworkingModule.setCustomClientBuilder` (debug builds only). This is a global hook — if your app or another library already sets a custom OkHttp client builder, registering Flipper will replace it. If you need your own builder, add the Flipper interceptor inside it yourself instead of relying on the default integration.
 
@@ -238,24 +298,23 @@ See `src/extension.ts` for typed documentation.
 
 ## React Native architecture support
 
-| Mode             | Implementation                                                           |
-| ---------------- | ------------------------------------------------------------------------ |
-| Old Architecture | `NativeModules.FlipperIntegration` (JS fallback)                         |
-| New Architecture | Turbo Module via `NativeFlipperIntegrationSpec` + `getTurboModule` (iOS) |
+| Mode             | Implementation                                                              |
+| ---------------- | --------------------------------------------------------------------------- |
+| Old Architecture | `NativeModules.ReactNativeFlipperKit` (JS fallback)                         |
+| New Architecture | Turbo Module via `NativeReactNativeFlipperKitSpec` + `getTurboModule` (iOS) |
 
-Android module extends generated `NativeFlipperIntegrationSpec`. iOS implements `NativeFlipperIntegrationSpec` when codegen headers are present.
+Android module extends generated `NativeReactNativeFlipperKitSpec`. iOS implements `NativeReactNativeFlipperKitSpec` when codegen headers are present.
 
 ---
 
 ## Module structure
 
 ```
-react-native-flipper-integration/
+react-native-flipper-kit/
 ├── src/
 │   ├── index.ts
-│   ├── NativeFlipperIntegration.ts   # codegen spec
-│   └── extension.ts                  # custom plugin docs
-├── android/
+│   └── NativeReactNativeFlipperKit.ts  # codegen spec
+├── android/                            # package dev.cycleport.flipperkit
 │   ├── build.gradle
 │   ├── consumer-rules.pro
 │   └── src/
@@ -263,12 +322,16 @@ react-native-flipper-integration/
 │       ├── flipper/                    # real Flipper (debug or all variants)
 │       └── release/                    # no-op (NO_FLIPPER / debug-only release)
 ├── ios/
-│   ├── FlipperIntegration.mm           # Bridge + Turbo Module
-│   ├── FlipperIntegrationConfig.*      # plugins + extension hooks
-│   └── FlipperIntegrationInitializer.mm
-├── example/                            # JS usage sample
+│   ├── ReactNativeFlipperKit.mm           # Bridge + Turbo Module
+│   ├── ReactNativeFlipperKitConfig.*      # plugins + extension hooks
+│   └── ReactNativeFlipperKitInitializer.mm
+├── examples/                           # sample apps (bare/Expo × old/new arch)
+│   ├── bare-new-arch/                  # bare RN, New Architecture (reference)
+│   ├── bare-old-arch/                  # bare RN, Old Architecture
+│   ├── expo-new-arch/                  # Expo, New Architecture
+│   └── expo-old-arch/                  # Expo, Old Architecture
 ├── app.plugin.js                       # Expo config plugin
-└── FlipperIntegration.podspec
+└── ReactNativeFlipperKit.podspec
 ```
 
 ---
@@ -292,26 +355,35 @@ Pre-commit runs **lint-staged**: ESLint fix + Prettier on staged `*.{js,ts,tsx}`
 
 ---
 
-## Example app (Android / iOS)
+## Example apps (Android / iOS)
 
-Native example in `example/` with autolinked `react-native-flipper-integration`.
+Four sample apps live under [`examples/`](examples/), each autolinking `react-native-flipper-kit` and demonstrating every plugin. The architecture is pinned **natively** in each app (not toggled at runtime):
+
+| App                                       | Framework | Architecture     |
+| ----------------------------------------- | --------- | ---------------- |
+| [`bare-new-arch`](examples/bare-new-arch) | bare RN   | New Architecture |
+| `bare-old-arch`                           | bare RN   | Old Architecture |
+| `expo-new-arch`                           | Expo      | New Architecture |
+| `expo-old-arch`                           | Expo      | Old Architecture |
+
+The root `npm run example:*` scripts target `bare-new-arch` (the reference app):
 
 ```bash
 # From repo root
 npm install
-cd example && npm install
+cd examples/bare-new-arch && npm install
 
 # Android
 npm run example:android
-# or: cd example && npm run android
+# or: cd examples/bare-new-arch && npm run android
 
 # iOS
-cd example/ios && pod install && cd .. && npm run ios
+cd examples/bare-new-arch/ios && pod install && cd .. && npm run ios
 ```
 
 | Script (root)                   | Description                                                        |
 | ------------------------------- | ------------------------------------------------------------------ |
-| `npm run example`               | Start Metro for example                                            |
+| `npm run example`               | Start Metro for the reference app                                  |
 | `npm run example:android`       | Run on Android device/emulator                                     |
 | `npm run example:ios`           | Run on iOS simulator                                               |
 | `npm run example:android:build` | Assemble Debug APK                                                 |
@@ -319,11 +391,11 @@ cd example/ios && pod install && cd .. && npm run ios
 
 ### E2E (Maestro)
 
-Flows live in `example/.maestro/`. Local run (Metro + installed app):
+Flows live in `examples/bare-new-arch/.maestro/`. Local run (Metro + installed app):
 
 ```bash
 curl -fsSL "https://get.maestro.mobile.dev" | bash
-cd example && npm start &
+cd examples/bare-new-arch && npm start &
 adb reverse tcp:8081 tcp:8081
 npm run android
 maestro test .maestro
