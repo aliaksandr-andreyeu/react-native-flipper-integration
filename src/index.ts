@@ -36,12 +36,24 @@ function coerceNativeBool(value: unknown): boolean | undefined {
   return undefined;
 }
 
+function isOldArchPaper(): boolean {
+  if (Platform.OS !== 'ios') {
+    return false;
+  }
+  const g = global as typeof globalThis & {
+    RN$Bridgeless?: boolean;
+    nativeFabricUIManager?: unknown;
+  };
+  return g.RN$Bridgeless !== true && g.nativeFabricUIManager == null;
+}
+
 function readLegacyFlipperConstants(
   legacy: LegacyNativeModule
 ): { flipperEnabled: boolean; flipperDebugOnly: boolean } | null {
+  const legacyRecord = legacy as Record<string, unknown>;
   const fromModule = {
-    flipperEnabled: coerceNativeBool(legacy.flipperEnabled),
-    flipperDebugOnly: coerceNativeBool(legacy.flipperDebugOnly)
+    flipperEnabled: coerceNativeBool(legacy.flipperEnabled ?? legacyRecord['flipperEnabled']),
+    flipperDebugOnly: coerceNativeBool(legacy.flipperDebugOnly ?? legacyRecord['flipperDebugOnly'])
   };
   if (fromModule.flipperEnabled !== undefined && fromModule.flipperDebugOnly !== undefined) {
     return {
@@ -50,10 +62,16 @@ function readLegacyFlipperConstants(
     };
   }
 
+  // getConstants() can block the Paper bridge on Old Arch iOS — only use direct exports.
+  if (isOldArchPaper()) {
+    return null;
+  }
+
   const constants = legacy.getConstants?.();
   if (constants != null) {
-    const flipperEnabled = coerceNativeBool(constants.flipperEnabled);
-    const flipperDebugOnly = coerceNativeBool(constants.flipperDebugOnly);
+    const constantsRecord = constants as Record<string, unknown>;
+    const flipperEnabled = coerceNativeBool(constants.flipperEnabled ?? constantsRecord['flipperEnabled']);
+    const flipperDebugOnly = coerceNativeBool(constants.flipperDebugOnly ?? constantsRecord['flipperDebugOnly']);
     if (flipperEnabled !== undefined && flipperDebugOnly !== undefined) {
       return { flipperEnabled, flipperDebugOnly };
     }
@@ -101,13 +119,16 @@ function resolveReactNativeFlipperKitModule(): Spec {
     return legacyModuleFromConstants(legacy, legacyConstants);
   }
 
-  const turbo = TurboModuleRegistry.get<Spec>('ReactNativeFlipperKit');
-  if (isSpecModule(turbo)) {
-    return turbo;
-  }
+  // Old Arch Paper: TurboModule / legacy spec stubs can deadlock on isEnabled().
+  if (!isOldArchPaper()) {
+    const turbo = TurboModuleRegistry.get<Spec>('ReactNativeFlipperKit');
+    if (isSpecModule(turbo)) {
+      return turbo;
+    }
 
-  if (legacy != null && isSpecModule(legacy)) {
-    return legacy;
+    if (legacy != null && isSpecModule(legacy)) {
+      return legacy;
+    }
   }
 
   if (legacy != null && typeof legacy.start === 'function') {
