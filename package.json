@@ -65,7 +65,7 @@
     }
   },
   "devDependencies": {
-    "@eslint/js": "^9.39.0",
+    "@eslint/js": "^9.39.5",
     "@expo/config-plugins": "^10.0.0",
     "@react-native/babel-preset": "0.86.0",
     "@types/jest": "^30.0.0",
