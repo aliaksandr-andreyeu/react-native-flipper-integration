@@ -1,8 +1,8 @@
 name: Example E2E (Maestro)
 
+# On-demand only — the Maestro E2E (APK build + Android emulator / iOS simulator) is
+# heavy and never part of the required merge gate. Trigger it manually when needed.
 on:
-  pull_request:
-    branches: [main, development]
   workflow_dispatch:
 
 concurrency:
@@ -85,10 +85,8 @@ jobs:
             maestro test examples/bare-new-arch/.maestro/smoke.yaml
 
   maestro-ios:
-    # Manual-dispatch only until it has proven green a few times: macOS runners are slow
-    # and costly, and this is non-gating. Remove this `if` to run it on every PR like the
-    # Android job once you're confident.
-    if: github.event_name == 'workflow_dispatch'
+    # macOS runner — slow and costly. The whole workflow is manual-dispatch only, so this
+    # runs alongside the Android job whenever you trigger it.
     runs-on: macos-latest
     timeout-minutes: 45
     steps:
