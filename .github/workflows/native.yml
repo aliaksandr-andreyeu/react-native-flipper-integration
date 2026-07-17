@@ -1,0 +1,88 @@
+name: Native (on-demand)
+
+# Heavy native checks — Android (gradle + Robolectric + APK) and iOS (macOS runner:
+# host gating test + podspec lint). NOT part of the required merge gate. Runs:
+#   - manually via "Run workflow" (workflow_dispatch), and
+#   - automatically on a PR ONLY when native code changes (paths filter below),
+#     so JS/docs-only PRs never spin up gradle / a macOS runner.
+# Keep these OUT of branch-protection required checks.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main, development]
+    paths:
+      - 'android/**'
+      - 'ios/**'
+      - 'ReactNativeFlipperKit.podspec'
+      - 'react-native.config.js'
+      - 'examples/**/android/**'
+      - 'examples/**/ios/**'
+      - '.github/workflows/native.yml'
+
+concurrency:
+  group: native-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            examples/bare-new-arch/package-lock.json
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Build library TypeScript
+        run: npm run build
+
+      - name: Install example dependencies
+        run: npm ci
+        working-directory: examples/bare-new-arch
+
+      - name: Android unit tests (Robolectric)
+        working-directory: examples/bare-new-arch/android
+        run: chmod +x gradlew && ./gradlew :react-native-flipper-kit:testDebugUnitTest --no-daemon
+
+      - name: Bundle JavaScript for Android
+        working-directory: examples/bare-new-arch
+        run: |
+          mkdir -p android/app/src/main/assets
+          npx react-native bundle \
+            --platform android \
+            --dev true \
+            --entry-file index.js \
+            --bundle-output android/app/src/main/assets/index.android.bundle \
+            --assets-dest android/app/src/main/res
+
+      - name: Assemble example Debug APK (x86_64)
+        working-directory: examples/bare-new-arch/android
+        run: ./gradlew assembleDebug -PreactNativeArchitectures=x86_64 --no-daemon
+
+  ios:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: iOS gating unit test
+        run: |
+          clang -framework Foundation -I ios __tests__/ios/gating_test.m -o "${RUNNER_TEMP}/ios-gating-test"
+          "${RUNNER_TEMP}/ios-gating-test"
+
+      - name: Validate podspec
+        run: pod spec lint ReactNativeFlipperKit.podspec --quick --allow-warnings

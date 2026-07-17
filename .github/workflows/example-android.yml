@@ -3,9 +3,6 @@ name: Example Android Build
 on:
   workflow_dispatch:
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 concurrency:
   group: example-android-${{ github.ref }}
   cancel-in-progress: true
@@ -18,7 +15,7 @@ jobs:
 
       - uses: actions/setup-node@v6
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
 
       - uses: actions/setup-java@v5
@@ -34,10 +31,10 @@ jobs:
 
       - name: Install example dependencies
         run: npm ci
-        working-directory: example
+        working-directory: examples/bare-new-arch
 
       - name: Bundle JavaScript for Android
-        working-directory: example
+        working-directory: examples/bare-new-arch
         run: |
           mkdir -p android/app/src/main/assets
           npx react-native bundle \
@@ -48,5 +45,5 @@ jobs:
             --assets-dest android/app/src/main/res
 
       - name: Assemble example Debug APK (x86_64)
-        working-directory: example/android
+        working-directory: examples/bare-new-arch/android
         run: chmod +x gradlew && ./gradlew assembleDebug -PreactNativeArchitectures=x86_64 --no-daemon

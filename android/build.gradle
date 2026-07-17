@@ -1,5 +1,5 @@
 // Flipper SDK versions and source sets are controlled via rootProject:
-// FLIPPER_DEBUG_ONLY (default true), NO_FLIPPER=1, FLIPPER_VERSION.
+// FLIPPER_DEBUG_ONLY (default true), NO_FLIPPER=1, FLIPPER_VERSION, FLIPPER_AUTO_INIT (default true).
 
 def resolveFlipperDebugOnly() {
   if (rootProject.hasProperty("FLIPPER_DEBUG_ONLY")) {
@@ -11,9 +11,29 @@ def resolveFlipperDebugOnly() {
   return true
 }
 
+def resolveFlipperAutoInit() {
+  if (rootProject.hasProperty("FLIPPER_AUTO_INIT")) {
+    return rootProject.property("FLIPPER_AUTO_INIT").toString().toBoolean()
+  }
+  if (project.hasProperty("FLIPPER_AUTO_INIT")) {
+    return project.property("FLIPPER_AUTO_INIT").toString().toBoolean()
+  }
+  return true
+}
+
 def flipperDebugOnly = resolveFlipperDebugOnly()
+// When false, the native module does NOT auto-start Flipper; the app must call
+// initializeFlipper() from JS. Lets the app control init timing (e.g. after user consent).
+def flipperAutoInit = resolveFlipperAutoInit()
+// NOTE: Android pins a newer Flipper than iOS (see ReactNativeFlipperKit.podspec, 0.252.0).
+// The divergence is intentional: CocoaPods does not publish every Android Flipper release
+// for iOS, so the two platforms track the latest version each ecosystem actually ships.
 def flipperVersion = rootProject.findProperty("FLIPPER_VERSION") ?: "0.273.0"
 def flipperEnabled = rootProject.findProperty("NO_FLIPPER") != "1"
+// LeakCanary powers the Flipper "LeakCanary" plugin. flipper-leakcanary2-plugin declares
+// LeakCanary as compileOnly, so the module must supply it itself. Overridable to align with
+// a consumer app that already pins a specific LeakCanary.
+def leakCanaryVersion = rootProject.findProperty("LEAKCANARY_VERSION") ?: "2.14"
 
 def flipperDelegateSourceDirs = { boolean isDebug ->
   if (!flipperEnabled) {
@@ -30,18 +50,26 @@ apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
 
 android {
-  namespace "com.flipperintegration"
+  namespace "dev.cycleport.flipperkit"
   compileSdkVersion rootProject.ext.has("compileSdkVersion") ? rootProject.ext.compileSdkVersion : 36
 
   defaultConfig {
     minSdkVersion rootProject.ext.has("minSdkVersion") ? rootProject.ext.minSdkVersion : 24
     buildConfigField "boolean", "FLIPPER_DEBUG_ONLY", flipperDebugOnly.toString()
     buildConfigField "boolean", "FLIPPER_ENABLED", flipperEnabled.toString()
+    buildConfigField "boolean", "FLIPPER_AUTO_INIT", flipperAutoInit.toString()
     consumerProguardFiles "consumer-rules.pro"
   }
 
   buildFeatures {
     buildConfig true
+  }
+
+  testOptions {
+    unitTests {
+      includeAndroidResources = true
+      returnDefaultValues = true
+    }
   }
 
   sourceSets {
@@ -65,6 +93,10 @@ repositories {
 dependencies {
   implementation "com.facebook.react:react-android"
 
+  testImplementation "junit:junit:4.13.2"
+  testImplementation "org.robolectric:robolectric:4.14.1"
+  testImplementation "androidx.test:core:1.6.1"
+
   if (flipperEnabled) {
     def flipperDependency = flipperDebugOnly ? "debugImplementation" : "implementation"
     add(flipperDependency, "com.facebook.flipper:flipper:${flipperVersion}") {
@@ -73,5 +105,12 @@ dependencies {
     add(flipperDependency, "com.facebook.flipper:flipper-network-plugin:${flipperVersion}") {
       exclude group: "com.facebook.flipper"
     }
+    // Flipper's LeakCanary2 plugin + the LeakCanary runtime it integrates with. LeakCanary
+    // auto-installs via its own ContentProvider, so just being on the classpath enables leak
+    // detection; ReactNativeFlipperKitDelegateImpl wires its results into the Flipper plugin.
+    add(flipperDependency, "com.facebook.flipper:flipper-leakcanary2-plugin:${flipperVersion}") {
+      exclude group: "com.facebook.flipper"
+    }
+    add(flipperDependency, "com.squareup.leakcanary:leakcanary-android:${leakCanaryVersion}")
   }
 }
