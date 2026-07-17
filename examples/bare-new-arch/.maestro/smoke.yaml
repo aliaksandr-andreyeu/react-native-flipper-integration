@@ -1,0 +1,19 @@
+appId: dev.cycleport.flipperkit.example.barenewarch
+---
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible:
+      id: flipper-example-title
+    timeout: 60000
+- assertVisible:
+    id: flipper-example-title
+- assertVisible:
+    id: flipper-status-enabled
+- assertVisible:
+    id: flipper-status-debug-only
+# Exercise one demo that needs no network/native deps (console logging → Logs plugin).
+- tapOn:
+    id: btn-log
+- assertVisible:
+    id: out-logs
