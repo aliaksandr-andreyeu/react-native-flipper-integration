@@ -24,8 +24,10 @@ updates:
       - dependency-name: 'react-native'
         update-types: ['version-update:semver-major', 'version-update:semver-minor', 'version-update:semver-patch']
 
+  # Only the reference example is watched — the other three examples pin
+  # architecture-specific RN/Expo generations on purpose and are updated manually.
   - package-ecosystem: 'npm'
-    directory: '/example'
+    directory: '/examples/bare-new-arch'
     target-branch: 'development'
     schedule:
       interval: 'weekly'

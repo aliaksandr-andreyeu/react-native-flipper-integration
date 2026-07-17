@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import com.facebook.flipper.android.AndroidFlipperClient
 import com.facebook.flipper.android.utils.FlipperUtils
+import com.facebook.flipper.core.FlipperClient
 import com.facebook.flipper.plugins.crashreporter.CrashReporterPlugin
 import com.facebook.flipper.plugins.databases.DatabasesFlipperPlugin
 import com.facebook.flipper.plugins.inspector.DescriptorMapping
@@ -25,6 +26,25 @@ class ReactNativeFlipperKitDelegateImpl : ReactNativeFlipperKitDelegate {
 
   override fun initialize(context: Context, pluginInitializers: List<(Any) -> Unit>) {
     val client = AndroidFlipperClient.getInstance(context)
+
+    // Register plugins at most once per process. The tri-state guard upstream allows a
+    // RETRY after a failed start, but the client is a process-wide singleton: re-adding
+    // plugins on retry would throw on duplicate plugin ids (wedging every retry) and
+    // re-appending the LeakCanary listener would duplicate leak events. So registration
+    // is one-shot (same pattern as the crash handler below); only `client.start()` is
+    // retried.
+    if (pluginsRegistered.compareAndSet(false, true)) {
+      registerPlugins(client, context, pluginInitializers)
+    }
+
+    client.start()
+  }
+
+  private fun registerPlugins(
+    client: FlipperClient,
+    context: Context,
+    pluginInitializers: List<(Any) -> Unit>,
+  ) {
     client.addPlugin(InspectorFlipperPlugin(context, DescriptorMapping.withDefaults()))
 
     val networkPlugin = NetworkFlipperPlugin()
@@ -70,7 +90,6 @@ class ReactNativeFlipperKitDelegateImpl : ReactNativeFlipperKitDelegate {
     installCrashHandler(crashReporter)
 
     pluginInitializers.forEach { initializer -> initializer(client) }
-    client.start()
   }
 
   private fun installCrashHandler(plugin: CrashReporterPlugin) {
@@ -91,6 +110,9 @@ class ReactNativeFlipperKitDelegateImpl : ReactNativeFlipperKitDelegate {
   }
 
   private companion object {
+    // Process-wide (companion) on purpose: AndroidFlipperClient is a process-wide
+    // singleton, so at-most-once registration must survive delegate re-instantiation.
+    val pluginsRegistered = AtomicBoolean(false)
     val crashHandlerInstalled = AtomicBoolean(false)
   }
 }

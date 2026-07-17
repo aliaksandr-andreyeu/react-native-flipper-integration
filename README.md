@@ -294,6 +294,10 @@ See [`ios/ReactNativeFlipperKitConfig.h`](ios/ReactNativeFlipperKitConfig.h) and
 
 > **Android network plugin limitation:** to capture traffic, the module calls `NetworkingModule.setCustomClientBuilder` (debug builds only). This is a global hook — if your app or another library already sets a custom OkHttp client builder, registering Flipper will replace it. If you need your own builder, add the Flipper interceptor inside it yourself instead of relying on the default integration.
 
+> **Expo apps:** the Network plugin captures nothing under Expo's default `expo/fetch`, which bypasses `NetworkingModule`. Set `EXPO_PUBLIC_USE_RN_FETCH=1` to keep React Native's `fetch` — see [Troubleshooting → Expo: Network plugin stays empty](#expo-network-plugin-stays-empty-requests-succeed-nothing-shows).
+
+> **iOS requires the New Architecture.** On the Old Architecture, linking FlipperKit breaks the iOS Paper bridge at runtime (white screen or SIGABRT in debug builds) due to an ABI conflict between FlipperKit's frozen `Flipper-Folly` and React Native's `RCT-Folly`. On old-arch iOS set `NO_FLIPPER=1` (Android is unaffected either way) — see [Troubleshooting → Old Architecture + iOS](#old-architecture--ios-white-screen-or-sigabrt-on-launch-debug-builds).
+
 ---
 
 ## React Native architecture support
@@ -413,6 +417,55 @@ CI: **Example Android Build** and **Example iOS Build** (`NO_FLIPPER=1`).
 2. Use Flipper Desktop **0.239.0**
 3. Android: `adb reverse tcp:8097 tcp:8097`
 4. **Clean rebuild** after `pod install` / `gradle.properties` changes
+
+### Expo: Network plugin stays empty (requests succeed, nothing shows)
+
+**Symptom:** every other plugin works, `fetch()` calls complete without errors, but Flipper's **Network** tab shows no traffic. Only affects **Expo** apps — bare React Native is unaffected.
+
+**Cause:** Flipper's Network plugin captures traffic by installing an OkHttp interceptor via React Native's `NetworkingModule.setCustomClientBuilder(...)` (RN applies it per-request, so init timing is irrelevant). Expo's WinterCG runtime, however, **replaces `global.fetch` with [`expo/fetch`](https://docs.expo.dev/versions/latest/sdk/expo/#expofetch)** — a separate native networking client that **bypasses `NetworkingModule` entirely**. The interceptor never sees those requests, so the tab stays empty even though the requests succeed. (`XMLHttpRequest` is _not_ replaced, only `fetch`.)
+
+**Fix:** opt out of the `fetch` override so `global.fetch` stays React Native's `whatwg-fetch` (which flows through `NetworkingModule`). Set the environment variable **`EXPO_PUBLIC_USE_RN_FETCH=1`** for the Metro bundler process:
+
+```jsonc
+// package.json — the flag must be present when Metro bundles (EXPO_PUBLIC_* is inlined at build time)
+"scripts": {
+  "start": "EXPO_PUBLIC_USE_RN_FETCH=1 expo start",
+  "android": "EXPO_PUBLIC_USE_RN_FETCH=1 expo run:android",
+  "ios": "EXPO_PUBLIC_USE_RN_FETCH=1 expo run:ios"
+}
+```
+
+or, equivalently, add `EXPO_PUBLIC_USE_RN_FETCH=1` to the project's `.env`. Because the flag is inlined into the JS bundle, restart Metro with a cleared cache (`expo start --clear`) after setting it — **no native rebuild is required**. Expo gates the override on this flag in `node_modules/expo/src/winter/runtime.native.ts` (`if (!useRnFetch) install('fetch', …)`).
+
+> This is a general gotcha for any network debugger that hooks `NetworkingModule` (Flipper, Reactotron, Chrome network inspector): under Expo's default `expo/fetch` they see nothing until `EXPO_PUBLIC_USE_RN_FETCH=1` is set. See [`examples/expo-new-arch`](examples/expo-new-arch), which ships with the flag wired into its scripts.
+
+### Old Architecture + iOS: white screen or SIGABRT on launch (debug builds)
+
+On the **Old Architecture on iOS**, a **debug** build with Flipper linked fails at runtime in one of two ways, depending on the RN version:
+
+- **White screen, no error** (seen on RN 0.76 and 0.81): the app registers and "runs", but native module constants arrive in JS as empty objects — `NativeSourceCode.getConstants().scriptURL` is `undefined`, `Platform.constants.reactNativeVersion` is `null`, and the root view never renders.
+- **`SIGABRT` shortly after first render** (seen on RN 0.79): React Native's modern **fusebox** JS inspector aborts inside folly:
+
+```
+folly::json::serialize → google::LogMessageFatal → abort
+folly::toJson(folly::dynamic)
+InspectorPackagerConnection::Impl::sendToPackager(folly::dynamic)   ← RN inspector
+-[SRWebSocket _handleFrameWithData:opCode:]                          ← FlipperKit's SocketRocket
+```
+
+**Root cause (verified):** FlipperKit's frozen C++ deps (`Flipper-Folly` ≈2021 vintage, `Flipper-Glog`, `SocketRocket`) define the same symbols (`folly::`, `google::`, `SRWebSocket`) as React Native's own, much newer copies (`RCT-Folly` 2024.x, `glog`, RN's WebSocket) — a link-time One-Definition-Rule conflict with a **mismatched `folly::dynamic` ABI**. The Old-Architecture Paper bridge marshals constants and messages through `folly::dynamic` (`convertIdToFollyDynamic`), so mixed-ABI dynamics surface as silently-empty `{}` constants (→ white screen) or as a `LOG(FATAL)` in `folly::toJson` (→ SIGABRT). The New Architecture marshals through JSI directly, bypassing `folly::dynamic` on the critical path — which is why New-Arch iOS is unaffected.
+
+**Proof:** rebuilding the same old-arch app with `NO_FLIPPER=1 pod install` (FlipperKit pods removed, everything else identical) renders and works perfectly. Linking the Flipper pods back reintroduces the failure. This affects **any** consumer on old-arch iOS, not just this repo's examples.
+
+It can't be fixed by build-setting/header order (ODR is a link-time issue), `use_frameworks!` doesn't reliably isolate C++ vague-linkage symbols, and `RCTInspectorDevServerHelper.disableDebugger()` is a no-op under fusebox. A real fix requires forking FlipperKit's frozen podspecs to build against `RCT-Folly`. This is exactly why Meta removed Flipper from React Native core in 0.74+.
+
+**Practical guidance:**
+
+- **iOS + Old Architecture: don't link Flipper.** Set `NO_FLIPPER=1` for iOS (`NO_FLIPPER=1 pod install`) — the app runs normally, `isFlipperEnabled()` reports `false`. Keep Flipper on Android (flags are per-platform), where old-arch works fully.
+- **Release builds are unaffected** with the default `FLIPPER_DEBUG_ONLY=true` (Flipper pods are only linked into Debug).
+- For iOS Flipper debugging, use the **New Architecture** (see `bare-new-arch`, `expo-new-arch` — both verified on iOS).
+
+**Status:** documented limitation for the Old-Architecture iOS examples (`bare-old-arch`, `expo-old-arch`). Old-arch **Android** works fully. See [`examples/expo-old-arch`](examples/expo-old-arch#ios-known-limitation-crash-on-launch) for the crash analysis and [`examples/bare-old-arch`](examples/bare-old-arch) for the `NO_FLIPPER=1` verification.
 
 ### iOS: Firebase + modular headers errors
 

@@ -50,10 +50,9 @@ function isOldArchPaper(): boolean {
 function readLegacyFlipperConstants(
   legacy: LegacyNativeModule
 ): { flipperEnabled: boolean; flipperDebugOnly: boolean } | null {
-  const legacyRecord = legacy as Record<string, unknown>;
   const fromModule = {
-    flipperEnabled: coerceNativeBool(legacy.flipperEnabled ?? legacyRecord['flipperEnabled']),
-    flipperDebugOnly: coerceNativeBool(legacy.flipperDebugOnly ?? legacyRecord['flipperDebugOnly'])
+    flipperEnabled: coerceNativeBool(legacy.flipperEnabled),
+    flipperDebugOnly: coerceNativeBool(legacy.flipperDebugOnly)
   };
   if (fromModule.flipperEnabled !== undefined && fromModule.flipperDebugOnly !== undefined) {
     return {
@@ -69,9 +68,8 @@ function readLegacyFlipperConstants(
 
   const constants = legacy.getConstants?.();
   if (constants != null) {
-    const constantsRecord = constants as Record<string, unknown>;
-    const flipperEnabled = coerceNativeBool(constants.flipperEnabled ?? constantsRecord['flipperEnabled']);
-    const flipperDebugOnly = coerceNativeBool(constants.flipperDebugOnly ?? constantsRecord['flipperDebugOnly']);
+    const flipperEnabled = coerceNativeBool(constants.flipperEnabled);
+    const flipperDebugOnly = coerceNativeBool(constants.flipperDebugOnly);
     if (flipperEnabled !== undefined && flipperDebugOnly !== undefined) {
       return { flipperEnabled, flipperDebugOnly };
     }

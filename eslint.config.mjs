@@ -12,11 +12,13 @@ export default tseslint.config(
       '.vscode/**',
       'lib/**',
       'node_modules/**',
-      'examples/*/node_modules/**',
+      // Examples are standalone apps pinned to different RN/Expo generations; their
+      // scaffolded template code follows upstream conventions (require() imports etc.)
+      // and `expo prebuild` regenerates files. Each example is typechecked on its own —
+      // the root lint gate covers the library only.
+      'examples/**',
       'android/**',
       'ios/**',
-      'examples/*/android/**',
-      'examples/*/ios/**',
       '**/*.d.ts',
       'coverage/**'
     ]
@@ -34,7 +36,7 @@ export default tseslint.config(
     }
   },
   {
-    files: ['src/**/*.{ts,tsx}', 'examples/**/*.{ts,tsx}'],
+    files: ['src/**/*.{ts,tsx}'],
     plugins: {
       react: pluginReact,
       'react-hooks': pluginReactHooks
