@@ -1,1 +1,13 @@
+#!/usr/bin/env sh
+
+# GUI apps (Cursor, Xcode) invoke git with a minimal PATH that omits nvm/Homebrew.
+# Load Node so `npm run precommit` works outside an interactive shell.
+export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+if [ -s "$NVM_DIR/nvm.sh" ]; then
+  # shellcheck disable=SC1090
+  . "$NVM_DIR/nvm.sh"
+  [ -f .nvmrc ] && nvm use >/dev/null 2>&1 || true
+fi
+export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+
 npm run precommit

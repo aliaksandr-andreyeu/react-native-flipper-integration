@@ -8,8 +8,8 @@ module.exports = {
     '^.+\\.(js|jsx|ts|tsx)$': 'babel-jest'
   },
   transformIgnorePatterns: ['node_modules/(?!(react-native|@react-native|@react-native-community)/)'],
-  modulePathIgnorePatterns: ['<rootDir>/lib/', '<rootDir>/example/'],
-  collectCoverageFrom: ['src/index.ts', 'app.plugin.js', '!src/extension.ts', '!src/NativeFlipperIntegration.ts'],
+  modulePathIgnorePatterns: ['<rootDir>/lib/', '<rootDir>/examples/'],
+  collectCoverageFrom: ['src/index.ts', 'app.plugin.js', '!src/NativeReactNativeFlipperKit.ts'],
   coverageThreshold: {
     global: {
       branches: 80,

@@ -4,8 +4,8 @@ module.exports = {
     platforms: {
       android: {
         cmakeListsPath: null,
-        packageImportPath: 'import com.flipperintegration.FlipperIntegrationPackage;',
-        packageInstance: 'new FlipperIntegrationPackage()'
+        packageImportPath: 'import dev.cycleport.flipperkit.ReactNativeFlipperKitPackage;',
+        packageInstance: 'new ReactNativeFlipperKitPackage()'
       },
       ios: {}
     }

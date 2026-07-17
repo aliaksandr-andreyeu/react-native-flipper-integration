@@ -1,0 +1,7 @@
+{
+  "expo.jsEngine": "hermes",
+  "EX_DEV_CLIENT_NETWORK_INSPECTOR": "true",
+  "newArchEnabled": "false",
+  "FLIPPER_DEBUG_ONLY": "true",
+  "FLIPPER_AUTO_INIT": "false"
+}
