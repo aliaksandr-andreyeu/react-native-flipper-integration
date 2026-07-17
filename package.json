@@ -1,6 +1,6 @@
 {
-  "name": "react-native-flipper-integration",
-  "version": "1.0.1",
+  "name": "react-native-flipper-kit",
+  "version": "1.0.0",
   "description": "Configurable Flipper integration for React Native (Old + New Architecture)",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
@@ -11,17 +11,27 @@
     "lib",
     "android",
     "ios",
-    "FlipperIntegration.podspec",
+    "ReactNativeFlipperKit.podspec",
     "react-native.config.js",
     "app.plugin.js",
     "README.md",
+    "CHANGELOG.md",
     "LICENSE"
   ],
   "author": {
-    "name": "Aliaksandr Andreyeu",
-    "email": "andreyeu.aliaksandr@gmail.com"
+    "name": "Cycleport",
+    "url": "https://cycleport.com"
   },
+  "contributors": [
+    {
+      "name": "Aliaksandr Andreyeu",
+      "email": "andreyeu.aliaksandr@gmail.com"
+    }
+  ],
   "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
   "keywords": [
     "react-native",
     "flipper",
@@ -30,11 +40,11 @@
     "devtools"
   ],
   "bugs": {
-    "url": "https://github.com/aliaksandr-andreyeu/react-native-flipper-integration/issues"
+    "url": "https://github.com/cycleport/react-native-flipper-kit/issues"
   },
-  "homepage": "https://github.com/aliaksandr-andreyeu/react-native-flipper-integration#readme",
+  "homepage": "https://cycleport.com",
   "scripts": {
-    "prepare": "npm run build && husky",
+    "prepare": "npm run build && (husky || true)",
     "precommit": "lint-staged",
     "prepublishOnly": "npm run build",
     "build": "tsc",
@@ -45,19 +55,19 @@
     "format:check": "prettier --check \"./**/*.{js,jsx,cjs,mjs,ts,tsx,json}\"",
     "test": "jest",
     "test:coverage": "jest --coverage",
-    "example": "npm --prefix example start",
-    "example:android": "npm --prefix example run android",
-    "example:ios": "npm --prefix example run ios",
-    "example:android:build": "npm --prefix example run android:build",
-    "example:e2e": "npm --prefix example run e2e"
+    "example": "npm --prefix examples/bare-new-arch start",
+    "example:android": "npm --prefix examples/bare-new-arch run android",
+    "example:ios": "npm --prefix examples/bare-new-arch run ios",
+    "example:android:build": "npm --prefix examples/bare-new-arch run android:build",
+    "example:e2e": "npm --prefix examples/bare-new-arch run e2e"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/aliaksandr-andreyeu/react-native-flipper-integration.git"
+    "url": "https://github.com/cycleport/react-native-flipper-kit.git"
   },
   "peerDependencies": {
-    "react": "*",
-    "react-native": ">=0.73"
+    "react": ">=18.2.0",
+    "react-native": ">=0.74"
   },
   "peerDependenciesMeta": {
     "@expo/config-plugins": {
@@ -65,41 +75,42 @@
     }
   },
   "devDependencies": {
-    "@eslint/js": "^9.39.0",
+    "@eslint/js": "^9.39.5",
     "@expo/config-plugins": "^10.0.0",
     "@react-native/babel-preset": "0.86.0",
     "@types/jest": "^30.0.0",
     "@types/react": "^19.0.0",
     "babel-jest": "^30.0.0",
-    "jest": "^30.0.0",
     "eslint": "^9.39.0",
     "eslint-config-prettier": "^10.1.0",
     "eslint-plugin-react": "^7.37.0",
     "eslint-plugin-react-hooks": "^5.2.0",
     "globals": "^16.4.0",
     "husky": "^9.1.0",
+    "jest": "^30.0.0",
     "lint-staged": "^16.2.0",
+    "lockfile-lint": "5.0.0",
     "prettier": "^3.9.5",
     "react": "19.2.3",
     "react-native": "0.85.0",
     "typescript": "^5.8.0",
-    "typescript-eslint": "^8.61.1"
+    "typescript-eslint": "^8.64.0"
   },
   "codegenConfig": {
-    "name": "RNFlipperIntegrationSpec",
+    "name": "RNFlipperKitSpec",
     "type": "modules",
     "jsSrcsDir": "src",
     "android": {
-      "javaPackageName": "com.flipperintegration"
+      "javaPackageName": "dev.cycleport.flipperkit"
     },
     "ios": {
       "modulesProvider": {
-        "FlipperIntegration": "FlipperIntegration"
+        "ReactNativeFlipperKit": "ReactNativeFlipperKit"
       }
     }
   },
   "expo": {
-    "name": "react-native-flipper-integration",
+    "name": "react-native-flipper-kit",
     "plugins": [
       "./app.plugin.js"
     ]

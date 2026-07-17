@@ -1,11 +1,12 @@
 name: CI
 
+# Fast, required gate for every PR — JS/TS only (ubuntu, ~1-2 min). Native builds
+# (Android/iOS) live in native.yml and are on-demand / path-triggered, NOT required.
+# In branch protection, require only the "All checks passed" status.
+
 on:
   pull_request:
     branches: [main, development]
-
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -19,11 +20,26 @@ jobs:
 
       - uses: actions/setup-node@v6
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            examples/bare-new-arch/package-lock.json
 
       - name: Install dependencies
         run: npm ci
+
+      # Advisory state is external and changes without any code change, so a fresh
+      # advisory must not turn unrelated PRs red. Kept visible but non-blocking here;
+      # the blocking signal lives in the scheduled security-audit workflow.
+      - name: Audit dependencies (non-blocking)
+        run: npm audit --audit-level=high
+        continue-on-error: true
+
+      - name: Lockfile lint
+        run: |
+          npx lockfile-lint --path package-lock.json --type npm --validate-https --allowed-hosts npm
+          npx lockfile-lint --path examples/bare-new-arch/package-lock.json --type npm --validate-https --allowed-hosts npm
 
       - name: Build library
         run: npm run build
@@ -42,38 +58,34 @@ jobs:
 
       - name: Install example dependencies
         run: npm ci
-        working-directory: example
+        working-directory: examples/bare-new-arch
 
       - name: Typecheck example
         run: npm run typecheck
-        working-directory: example
+        working-directory: examples/bare-new-arch
 
-  podspec:
-    runs-on: macos-latest
+  # Advisory only (diff-scoped): flags vulnerable/incompatible deps a PR introduces.
+  # Runs on every PR but is intentionally NOT part of the required gate below.
+  dependency-review:
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+      - name: Dependency review
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
 
-      - name: Validate podspec
-        run: pod spec lint FlipperIntegration.podspec --quick --allow-warnings
-
+  # The single required status for branch protection. Stable name — the set of
+  # required jobs can change behind it without touching repo settings.
   all-checks-passed:
-    needs: [ci, podspec]
+    needs: [ci]
     if: always()
     name: All checks passed
     runs-on: ubuntu-latest
     steps:
       - run: |
-          FAILED=""
-          # Verify each required job
           if [[ "${{ needs.ci.result }}" != "success" ]]; then
-            FAILED+="ci "
-          fi
-          if [[ "${{ needs.podspec.result }}" != "success" ]]; then
-            FAILED+="podspec "
-          fi
-
-          if [[ -n "$FAILED" ]]; then
-            echo "The following required jobs failed or were skipped: $FAILED"
+            echo "Required job 'ci' failed or was skipped."
             exit 1
           fi
-          echo "All required jobs passed!"
+          echo "All required checks passed!"

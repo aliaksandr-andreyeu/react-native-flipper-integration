@@ -1,9 +1,11 @@
+# Examples are standalone apps (own template conventions; prebuild regenerates files) —
+# the root format gate covers the library only.
 .husky/
 .vscode/
 lib/
 node_modules/
-example/node_modules/
+examples/
 android/
 ios/
 package-lock.json
-example/package-lock.json
+coverage/

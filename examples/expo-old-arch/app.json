@@ -1,0 +1,50 @@
+{
+  "expo": {
+    "name": "FlipperKit Expo (Old Arch)",
+    "slug": "expo-old-arch",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "expooldarch",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": false,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "dev.cycleport.flipperkit.example.expooldarch"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "edgeToEdgeEnabled": true,
+      "package": "dev.cycleport.flipperkit.example.expooldarch"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#ffffff"
+        }
+      ],
+      [
+        "react-native-flipper-kit",
+        {
+          "flipperDebugOnly": true,
+          "flipperAutoInit": false,
+          "noFlipper": false
+        }
+      ],
+      "./plugins/withDemoTools",
+      "./plugins/withFlipperFollyFix",
+      "expo-asset"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

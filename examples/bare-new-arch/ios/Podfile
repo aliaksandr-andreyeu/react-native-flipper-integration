@@ -1,0 +1,62 @@
+# Resolve react_native_pods.rb with node to allow for hoisting
+require Pod::Executable.execute_command('node', ['-p',
+  'require.resolve(
+    "react-native/scripts/react_native_pods.rb",
+    {paths: [process.argv[1]]},
+  )', __dir__]).strip
+
+platform :ios, min_ios_version_supported
+prepare_react_native_project!
+
+# react-native-flipper-kit flags (mirror android/gradle.properties). The podspec reads these
+# from ENV at install time; `||=` keeps CLI overrides winning, e.g. `FLIPPER_AUTO_INIT=true pod install`.
+# - FLIPPER_DEBUG_ONLY=true is already the podspec default; set explicitly here for parity.
+# - FLIPPER_AUTO_INIT=false demonstrates the opt-in manual-init mode (start via initializeFlipper()).
+# Remove a line to fall back to the default (debug-only=true / auto-init=true).
+ENV['FLIPPER_DEBUG_ONLY'] ||= 'true'
+ENV['FLIPPER_AUTO_INIT'] ||= 'false'
+
+linkage = ENV['USE_FRAMEWORKS']
+if linkage != nil
+  Pod::UI.puts "Configuring Pod with #{linkage}ally linked Frameworks".green
+  use_frameworks! :linkage => linkage.to_sym
+end
+
+target 'FlipperKitBareNewArch' do
+  config = use_native_modules!
+
+  use_react_native!(
+    :path => config[:reactNativePath],
+    # An absolute path to your application root.
+    :app_path => "#{Pod::Config.instance.installation_root}/.."
+  )
+
+  post_install do |installer|
+    react_native_post_install(
+      installer,
+      config[:reactNativePath],
+      :mac_catalyst_enabled => false,
+      # :ccache_enabled => true
+    )
+
+    # Xcode 16 / macOS Sequoia: Flipper-Folly 2.6.x has a `static_assert(std::is_trivial<GlobalState>…)`
+    # that fails because the type is no longer "trivial" under the modern toolchain (C++20). folly
+    # upstream switched this check to `std::is_trivially_destructible` (GlobalState has a trivial
+    # destructor), but Flipper-Folly is frozen — so patch its header to match.
+    # See https://github.com/facebook/flipper/issues/5683
+    cache_locality = File.join(
+      installer.sandbox.root, 'Flipper-Folly', 'folly', 'concurrency', 'CacheLocality.h'
+    )
+    if File.exist?(cache_locality)
+      original = File.read(cache_locality)
+      patched = original.gsub(
+        'std::is_trivial<GlobalState>::value',
+        'std::is_trivially_destructible<GlobalState>::value'
+      )
+      if patched != original
+        File.write(cache_locality, patched)
+        Pod::UI.puts '[react-native-flipper-kit] Patched Flipper-Folly CacheLocality.h for Xcode 16'.green
+      end
+    end
+  end
+end

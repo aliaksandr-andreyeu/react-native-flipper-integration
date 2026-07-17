@@ -17,7 +17,7 @@ const mockPlatformSelect = jest.fn(
 
 jest.mock('react-native', () => {
   const nativeModules: Record<string, unknown> = {};
-  Object.defineProperty(nativeModules, 'FlipperIntegration', {
+  Object.defineProperty(nativeModules, 'ReactNativeFlipperKit', {
     get: () =>
       (global as typeof globalThis & { __legacyFlipperModule?: typeof mockLegacyModule }).__legacyFlipperModule,
     enumerable: true,
@@ -51,7 +51,7 @@ function loadApi() {
   return api!;
 }
 
-describe('react-native-flipper-integration JS API', () => {
+describe('react-native-flipper-kit JS API', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     setTurboModule(null);
@@ -86,6 +86,72 @@ describe('react-native-flipper-integration JS API', () => {
     expect(mockLegacyModule.start).toHaveBeenCalled();
   });
 
+  it('reads legacy constants on Old Arch iOS without blocking sync bridge calls', () => {
+    const legacyConstants = {
+      flipperEnabled: true,
+      flipperDebugOnly: false,
+      start: jest.fn()
+    };
+    setLegacyModule(legacyConstants);
+
+    const { isFlipperEnabled, isFlipperDebugOnly, initializeFlipper } = loadApi();
+
+    expect(isFlipperEnabled()).toBe(true);
+    expect(isFlipperDebugOnly()).toBe(false);
+    initializeFlipper();
+    expect(legacyConstants.start).toHaveBeenCalled();
+  });
+
+  it('coerces NSNumber-style legacy constants (0/1) from constantsToExport', () => {
+    const legacyConstants = {
+      flipperEnabled: 1,
+      flipperDebugOnly: 0,
+      start: jest.fn()
+    };
+    setLegacyModule(legacyConstants);
+
+    const { isFlipperEnabled, isFlipperDebugOnly } = loadApi();
+
+    expect(isFlipperEnabled()).toBe(true);
+    expect(isFlipperDebugOnly()).toBe(false);
+  });
+
+  it('reads legacy constants from getConstants() when not on the module object', () => {
+    const legacyConstants = {
+      getConstants: () => ({ flipperEnabled: 1, flipperDebugOnly: 1 }),
+      start: jest.fn()
+    };
+    setLegacyModule(legacyConstants);
+
+    const { isFlipperEnabled, isFlipperDebugOnly } = loadApi();
+
+    expect(isFlipperEnabled()).toBe(true);
+    expect(isFlipperDebugOnly()).toBe(true);
+  });
+
+  it('does not use a TurboModule stub without callable getters', () => {
+    setTurboModule({} as typeof mockTurboModule);
+    setLegacyModule({
+      flipperEnabled: 1,
+      flipperDebugOnly: 0,
+      start: jest.fn()
+    });
+
+    const { isFlipperEnabled, isFlipperDebugOnly } = loadApi();
+
+    expect(isFlipperEnabled()).toBe(true);
+    expect(isFlipperDebugOnly()).toBe(false);
+  });
+
+  it('uses safe defaults when only start() is exported on legacy module', () => {
+    setLegacyModule({ start: jest.fn() });
+
+    const { isFlipperEnabled, isFlipperDebugOnly } = loadApi();
+
+    expect(isFlipperEnabled()).toBe(false);
+    expect(isFlipperDebugOnly()).toBe(true);
+  });
+
   it('prefers Turbo Module over NativeModules', () => {
     setTurboModule(mockTurboModule);
     setLegacyModule(mockLegacyModule);
@@ -100,9 +166,7 @@ describe('react-native-flipper-integration JS API', () => {
   it('throws a linking error when no native module is registered', () => {
     const { isFlipperEnabled } = loadApi();
 
-    expect(() => isFlipperEnabled()).toThrow(
-      "The package 'react-native-flipper-integration' doesn't seem to be linked"
-    );
+    expect(() => isFlipperEnabled()).toThrow("The package 'react-native-flipper-kit' doesn't seem to be linked");
     expect(mockPlatformSelect).toHaveBeenCalled();
   });
 });

@@ -1,0 +1,689 @@
+diff --git a/node_modules/react-native/Libraries/Core/Devtools/getDevServer.js b/node_modules/react-native/Libraries/Core/Devtools/getDevServer.js
+index a4d886b..5023cb7 100644
+--- a/node_modules/react-native/Libraries/Core/Devtools/getDevServer.js
++++ b/node_modules/react-native/Libraries/Core/Devtools/getDevServer.js
+@@ -27,8 +27,9 @@ type DevServerInfo = {
+  */
+ function getDevServer(): DevServerInfo {
+   if (_cachedDevServerURL === undefined) {
++    // Old Arch Paper: SourceCode constants can be lazy before initialize().
+     const scriptUrl = NativeSourceCode.getConstants().scriptURL;
+-    const match = scriptUrl.match(/^https?:\/\/.*?\//);
++    const match = scriptUrl?.match(/^https?:\/\/.*?\//);
+     _cachedDevServerURL = match ? match[0] : null;
+     _cachedFullBundleURL = match ? scriptUrl : null;
+   }
+diff --git a/node_modules/react-native/Libraries/Core/InitializeCore.js b/node_modules/react-native/Libraries/Core/InitializeCore.js
+index f01d96e..d8f8240 100644
+--- a/node_modules/react-native/Libraries/Core/InitializeCore.js
++++ b/node_modules/react-native/Libraries/Core/InitializeCore.js
+@@ -43,7 +43,11 @@ require('./setUpSegmentFetcher');
+ if (__DEV__) {
+   require('./checkNativeVersion');
+   require('./setUpDeveloperTools');
+-  require('../LogBox/LogBox').default.install();
++  const isOldArchPaper =
++    global.RN$Bridgeless !== true && global.nativeFabricUIManager == null;
++  if (!isOldArchPaper) {
++    require('../LogBox/LogBox').default.install();
++  }
+ }
+ 
+ require('../ReactNative/AppRegistry');
+diff --git a/node_modules/react-native/Libraries/Core/ReactNativeVersionCheck.js b/node_modules/react-native/Libraries/Core/ReactNativeVersionCheck.js
+index aca1389..00d701f 100644
+--- a/node_modules/react-native/Libraries/Core/ReactNativeVersionCheck.js
++++ b/node_modules/react-native/Libraries/Core/ReactNativeVersionCheck.js
+@@ -23,6 +23,9 @@ const ReactNativeVersion = require('./ReactNativeVersion');
+  */
+ const checkVersions = function checkVersions(): void {
+   const nativeVersion = Platform.constants.reactNativeVersion;
++  if (nativeVersion == null) {
++    return;
++  }
+   if (
+     ReactNativeVersion.version.major !== nativeVersion.major ||
+     ReactNativeVersion.version.minor !== nativeVersion.minor
+diff --git a/node_modules/react-native/Libraries/Core/setUpReactDevTools.js b/node_modules/react-native/Libraries/Core/setUpReactDevTools.js
+index c70279b..750bb79 100644
+--- a/node_modules/react-native/Libraries/Core/setUpReactDevTools.js
++++ b/node_modules/react-native/Libraries/Core/setUpReactDevTools.js
+@@ -113,30 +113,35 @@ if (__DEV__) {
+     }
+   }
+ 
+-  // 1. If React DevTools has already been opened and initialized in Fusebox, bindings survive reloads
+-  if (global[reactDevToolsFuseboxGlobalBindingName] != null) {
+-    disconnectBackendFromReactDevToolsInFuseboxIfNeeded();
+-    const domain =
+-      fuseboxReactDevToolsDispatcher.initializeDomain('react-devtools');
+-    connectToReactDevToolsInFusebox(domain);
+-  }
++  // Old Arch Paper: Fusebox / Metro `j` DevTools need the C++ CDP bridge (New Arch).
++  const isOldArchPaper =
++    global.RN$Bridgeless !== true && global.nativeFabricUIManager == null;
++  if (!isOldArchPaper) {
++    // 1. If React DevTools has already been opened and initialized in Fusebox, bindings survive reloads
++    if (global[reactDevToolsFuseboxGlobalBindingName] != null) {
++      disconnectBackendFromReactDevToolsInFuseboxIfNeeded();
++      const domain =
++        fuseboxReactDevToolsDispatcher.initializeDomain('react-devtools');
++      connectToReactDevToolsInFusebox(domain);
++    }
+ 
+-  // 2. If React DevTools panel in Fusebox was opened for the first time after the runtime has been created
+-  // 2. OR if React DevTools frontend was re-initialized: Chrome DevTools was closed and then re-opened
+-  global.__FUSEBOX_REACT_DEVTOOLS_DISPATCHER__.onDomainInitialization.addEventListener(
+-    (domain: Domain) => {
+-      if (domain.name === 'react-devtools') {
+-        disconnectBackendFromReactDevToolsInFuseboxIfNeeded();
+-        connectToReactDevToolsInFusebox(domain);
+-      }
+-    },
+-  );
+-
+-  // 3. Fallback to attempting to connect WS-based RDT frontend
+-  const RCTNativeAppEventEmitter = require('../EventEmitter/RCTNativeAppEventEmitter');
+-  RCTNativeAppEventEmitter.addListener(
+-    'RCTDevMenuShown',
+-    connectToWSBasedReactDevToolsFrontend,
+-  );
+-  connectToWSBasedReactDevToolsFrontend(); // Try connecting once on load
++    // 2. If React DevTools panel in Fusebox was opened for the first time after the runtime has been created
++    // 2. OR if React DevTools frontend was re-initialized: Chrome DevTools was closed and then re-opened
++    global.__FUSEBOX_REACT_DEVTOOLS_DISPATCHER__.onDomainInitialization.addEventListener(
++      (domain: Domain) => {
++        if (domain.name === 'react-devtools') {
++          disconnectBackendFromReactDevToolsInFuseboxIfNeeded();
++          connectToReactDevToolsInFusebox(domain);
++        }
++      },
++    );
++
++    // 3. Fallback to attempting to connect WS-based RDT frontend
++    const RCTNativeAppEventEmitter = require('../EventEmitter/RCTNativeAppEventEmitter');
++    RCTNativeAppEventEmitter.addListener(
++      'RCTDevMenuShown',
++      connectToWSBasedReactDevToolsFrontend,
++    );
++    connectToWSBasedReactDevToolsFrontend(); // Try connecting once on load
++  }
+ }
+diff --git a/node_modules/react-native/Libraries/EventEmitter/RCTEventEmitter.js b/node_modules/react-native/Libraries/EventEmitter/RCTEventEmitter.js
+index 27519d2..08023f8 100644
+--- a/node_modules/react-native/Libraries/EventEmitter/RCTEventEmitter.js
++++ b/node_modules/react-native/Libraries/EventEmitter/RCTEventEmitter.js
+@@ -12,12 +12,84 @@
+ 
+ const BatchedBridge = require('../BatchedBridge/BatchedBridge');
+ 
++const TOUCH_TUPLE_FIELDS = [
++  'identifier',
++  'target',
++  'pageX',
++  'pageY',
++  'locationX',
++  'locationY',
++  'timestamp',
++  'force',
++];
++
++function touchFromTuple(tuple) {
++  const touch = {};
++  for (let i = 0; i < TOUCH_TUPLE_FIELDS.length; i++) {
++    const value = tuple[i];
++    if (value != null) {
++      touch[TOUCH_TUPLE_FIELDS[i]] = value;
++    }
++  }
++  return touch;
++}
++
++function normalizeTouches(touches) {
++  if (!Array.isArray(touches) || touches.length === 0) {
++    return touches;
++  }
++
++  if (Array.isArray(touches[0])) {
++    return touches.map(touchFromTuple);
++  }
++
++  return touches.map(touch => {
++    if (touch == null || typeof touch !== 'object') {
++      return touch;
++    }
++    if (touch.identifier != null) {
++      return touch;
++    }
++    const identifier = touch['identifier'];
++    if (identifier == null) {
++      return touch;
++    }
++    return {
++      identifier,
++      target: touch.target ?? touch['target'],
++      pageX: touch.pageX ?? touch['pageX'],
++      pageY: touch.pageY ?? touch['pageY'],
++      locationX: touch.locationX ?? touch['locationX'],
++      locationY: touch.locationY ?? touch['locationY'],
++      timestamp: touch.timestamp ?? touch['timestamp'],
++      force: touch.force ?? touch['force'],
++    };
++  });
++}
++
++function wrapEventEmitter(eventEmitter) {
++  if (typeof eventEmitter.receiveTouches !== 'function') {
++    return eventEmitter;
++  }
++  return {
++    ...eventEmitter,
++    receiveTouches(eventTopLevelType, touches, changedIndices) {
++      return eventEmitter.receiveTouches(
++        eventTopLevelType,
++        normalizeTouches(touches),
++        changedIndices,
++      );
++    },
++  };
++}
++
+ const RCTEventEmitter = {
+   register(eventEmitter: any) {
++    const wrapped = wrapEventEmitter(eventEmitter);
+     if (global.RN$Bridgeless) {
+-      global.RN$registerCallableModule('RCTEventEmitter', () => eventEmitter);
++      global.RN$registerCallableModule('RCTEventEmitter', () => wrapped);
+     } else {
+-      BatchedBridge.registerCallableModule('RCTEventEmitter', eventEmitter);
++      BatchedBridge.registerCallableModule('RCTEventEmitter', wrapped);
+     }
+   },
+ };
+diff --git a/node_modules/react-native/Libraries/ReactNative/AppContainer-dev.js b/node_modules/react-native/Libraries/ReactNative/AppContainer-dev.js
+index b5a1a07..63d2fe4 100644
+--- a/node_modules/react-native/Libraries/ReactNative/AppContainer-dev.js
++++ b/node_modules/react-native/Libraries/ReactNative/AppContainer-dev.js
+@@ -185,7 +185,14 @@ const AppContainer = ({
+           />
+         )}
+ 
+-        {!internal_excludeLogBox && <LogBoxNotificationContainer />}
++        {(() => {
++          const isOldArchPaper =
++            global.RN$Bridgeless !== true && global.nativeFabricUIManager == null;
++          if (internal_excludeLogBox || isOldArchPaper) {
++            return null;
++          }
++          return <LogBoxNotificationContainer />;
++        })()}
+       </View>
+     </RootTagContext.Provider>
+   );
+diff --git a/node_modules/react-native/Libraries/ReactNative/AppContainer.js b/node_modules/react-native/Libraries/ReactNative/AppContainer.js
+index 91a51cd..7b51582 100644
+--- a/node_modules/react-native/Libraries/ReactNative/AppContainer.js
++++ b/node_modules/react-native/Libraries/ReactNative/AppContainer.js
+@@ -24,8 +24,13 @@ export type Props = $ReadOnly<{|
+   internal_excludeInspector?: boolean,
+ |}>;
+ 
+-const AppContainer: React.AbstractComponent<Props> = __DEV__
+-  ? require('./AppContainer-dev').default
+-  : require('./AppContainer-prod').default;
++const AppContainer: React.AbstractComponent<Props> = (() => {
++  const isOldArchPaper =
++    global.RN$Bridgeless !== true && global.nativeFabricUIManager == null;
++  if (__DEV__ && !isOldArchPaper) {
++    return require('./AppContainer-dev').default;
++  }
++  return require('./AppContainer-prod').default;
++})();
+ 
+ module.exports = AppContainer;
+diff --git a/node_modules/react-native/Libraries/ReactNative/AppRegistry.js b/node_modules/react-native/Libraries/ReactNative/AppRegistry.js
+index 9448296..57c42eb 100644
+--- a/node_modules/react-native/Libraries/ReactNative/AppRegistry.js
++++ b/node_modules/react-native/Libraries/ReactNative/AppRegistry.js
+@@ -74,6 +74,60 @@ let componentProviderInstrumentationHook: ComponentProviderInstrumentationHook =
+ let wrapperComponentProvider: ?WrapperComponentProvider;
+ let rootViewStyleProvider: ?RootViewStyleProvider;
+ 
++function normalizeAppParameters(appParameters: AppParameters): AppParameters {
++  if (appParameters?.rootTag != null) {
++    return appParameters;
++  }
++  const raw: {[string]: mixed} = (appParameters: $FlowFixMe) ?? {};
++  const rootTag = raw.rootTag ?? raw['rootTag'];
++  const initialProps = raw.initialProps ?? raw['initialProps'] ?? {};
++  if (rootTag != null) {
++    return {
++      rootTag,
++      initialProps,
++      fabric: raw.fabric ?? raw['fabric'],
++      concurrentRoot: raw.concurrentRoot ?? raw['concurrentRoot'],
++    };
++  }
++  return appParameters;
++}
++
++function resolveRunApplicationParams(
++  appParametersOrRootTag: AppParameters | number,
++  maybeInitialProps?: mixed,
++): AppParameters {
++  if (typeof appParametersOrRootTag === 'number') {
++    const initialProps =
++      maybeInitialProps != null &&
++      typeof maybeInitialProps === 'object' &&
++      !Array.isArray(maybeInitialProps)
++        ? maybeInitialProps
++        : {};
++    return {rootTag: appParametersOrRootTag, initialProps};
++  }
++  return normalizeAppParameters(appParametersOrRootTag);
++}
++
++function resolveRunApplicationDisplayMode(
++  appParametersOrRootTag: AppParameters | number,
++  second?: mixed,
++  third?: number,
++): ?number {
++  if (typeof appParametersOrRootTag === 'number') {
++    if (typeof third === 'number') {
++      return third;
++    }
++    if (typeof second === 'number') {
++      return second;
++    }
++    return undefined;
++  }
++  if (typeof second === 'number') {
++    return second;
++  }
++  return undefined;
++}
++
+ /**
+  * `AppRegistry` is the JavaScript entry point to running all React Native apps.
+  *
+@@ -194,9 +248,21 @@ const AppRegistry = {
+    */
+   runApplication(
+     appKey: string,
+-    appParameters: AppParameters,
+-    displayMode?: number,
++    appParametersOrRootTag: AppParameters | number,
++    maybeInitialPropsOrDisplayMode?: mixed,
++    maybeDisplayMode?: number,
+   ): void {
++    const appParameters = resolveRunApplicationParams(
++      appParametersOrRootTag,
++      typeof appParametersOrRootTag === 'number'
++        ? maybeInitialPropsOrDisplayMode
++        : undefined,
++    );
++    const displayMode = resolveRunApplicationDisplayMode(
++      appParametersOrRootTag,
++      maybeInitialPropsOrDisplayMode,
++      maybeDisplayMode,
++    );
+     if (appKey !== 'LogBox') {
+       const logParams = __DEV__ ? ` with ${JSON.stringify(appParameters)}` : '';
+       const msg = `Running "${appKey}"${logParams}`;
+@@ -226,12 +292,13 @@ const AppRegistry = {
+     appParameters: Object,
+     displayMode?: number,
+   ): void {
++    const normalized = normalizeAppParameters((appParameters: $FlowFixMe));
+     if (appKey !== 'LogBox') {
+       const msg =
+         'Updating props for Surface "' +
+         appKey +
+         '" with ' +
+-        JSON.stringify(appParameters);
++        JSON.stringify(normalized);
+       infoLog(msg);
+       BugReporting.addSource(
+         'AppRegistry.setSurfaceProps' + runCount++,
+@@ -246,7 +313,7 @@ const AppRegistry = {
+         "* A module failed to load due to an error and `AppRegistry.registerComponent` wasn't called.",
+     );
+ 
+-    runnables[appKey](appParameters, coerceDisplayMode(displayMode));
++    runnables[appKey](normalized, coerceDisplayMode(displayMode));
+   },
+ 
+   /**
+@@ -365,6 +432,13 @@ if (global.RN$Bridgeless === true) {
+   console.log('Bridgeless mode is enabled');
+ }
+ 
+-registerCallableModule('AppRegistry', AppRegistry);
++registerCallableModule('AppRegistry', {
++  runApplication: AppRegistry.runApplication,
++  setSurfaceProps: AppRegistry.setSurfaceProps,
++  unmountApplicationComponentAtRootTag:
++    AppRegistry.unmountApplicationComponentAtRootTag,
++  startHeadlessTask: AppRegistry.startHeadlessTask,
++  cancelHeadlessTask: AppRegistry.cancelHeadlessTask,
++});
+ 
+ module.exports = AppRegistry;
+diff --git a/node_modules/react-native/Libraries/ReactNative/renderApplication.js b/node_modules/react-native/Libraries/ReactNative/renderApplication.js
+index c483082..a9876d8 100644
+--- a/node_modules/react-native/Libraries/ReactNative/renderApplication.js
++++ b/node_modules/react-native/Libraries/ReactNative/renderApplication.js
+@@ -28,6 +28,10 @@ type ActivityType = React.AbstractComponent<{
+   children: React.Node,
+ }>;
+ 
++function isOldArchPaper(): boolean {
++  return global.RN$Bridgeless !== true && global.nativeFabricUIManager == null;
++}
++
+ export default function renderApplication<Props: Object>(
+   RootComponent: React.ComponentType<Props>,
+   initialProps: Props,
+@@ -42,25 +46,32 @@ export default function renderApplication<Props: Object>(
+   useConcurrentRoot?: boolean,
+   useOffscreen?: boolean,
+ ) {
+-  invariant(rootTag, 'Expect to have a valid rootTag, instead got ', rootTag);
++  const tag =
++    typeof rootTag === 'number' && !Number.isNaN(rootTag)
++      ? rootTag
++      : Number(rootTag);
++  invariant(tag, 'Expect to have a valid rootTag, instead got ', rootTag);
+ 
+   const performanceLogger = scopedPerformanceLogger ?? GlobalPerformanceLogger;
++  const paperOldArch = isOldArchPaper() && !fabric;
+ 
+-  let renderable: React.MixedElement = (
++  let renderable: React.MixedElement = paperOldArch ? (
++    <RootComponent {...initialProps} rootTag={tag} />
++  ) : (
+     <PerformanceLoggerContext.Provider value={performanceLogger}>
+       <AppContainer
+-        rootTag={rootTag}
++        rootTag={tag}
+         fabric={fabric}
+         WrapperComponent={WrapperComponent}
+         rootViewStyle={rootViewStyle}
+         initialProps={initialProps ?? Object.freeze({})}
+         internal_excludeLogBox={isLogBox}>
+-        <RootComponent {...initialProps} rootTag={rootTag} />
++        <RootComponent {...initialProps} rootTag={tag} />
+       </AppContainer>
+     </PerformanceLoggerContext.Provider>
+   );
+ 
+-  if (__DEV__ && debugName) {
++  if (__DEV__ && debugName && !paperOldArch) {
+     const RootComponentWithMeaningfulName = getCachedComponentWithDebugName(
+       `${debugName}(RootComponent)`,
+     );
+@@ -99,7 +110,7 @@ export default function renderApplication<Props: Object>(
+   );
+   Renderer.renderElement({
+     element: renderable,
+-    rootTag,
++    rootTag: tag,
+     useFabric: Boolean(fabric),
+     useConcurrentRoot: Boolean(useConcurrentRootOverride),
+   });
+diff --git a/node_modules/react-native/Libraries/Settings/Settings.ios.js b/node_modules/react-native/Libraries/Settings/Settings.ios.js
+index 994e922..49b7469 100644
+--- a/node_modules/react-native/Libraries/Settings/Settings.ios.js
++++ b/node_modules/react-native/Libraries/Settings/Settings.ios.js
+@@ -19,8 +19,9 @@ const subscriptions: Array<{
+ }> = [];
+ 
+ const Settings = {
+-  _settings: (NativeSettingsManager &&
+-    NativeSettingsManager.getConstants().settings: any),
++  _settings: ((NativeSettingsManager &&
++    NativeSettingsManager.getConstants()?.settings) ||
++    {}: any),
+ 
+   get(key: string): mixed {
+     // $FlowFixMe[object-this-reference]
+diff --git a/node_modules/react-native/Libraries/Utilities/Dimensions.js b/node_modules/react-native/Libraries/Utilities/Dimensions.js
+index e5775a9..8495047 100644
+--- a/node_modules/react-native/Libraries/Utilities/Dimensions.js
++++ b/node_modules/react-native/Libraries/Utilities/Dimensions.js
+@@ -25,6 +25,44 @@ const eventEmitter = new EventEmitter<{
+ let dimensionsInitialized = false;
+ let dimensions: DimensionsPayload;
+ 
++const FALLBACK_METRICS: DisplayMetrics = {
++  width: 390,
++  height: 844,
++  scale: 3,
++  fontScale: 1,
++};
++
++function hasWindowDimensions(dims: ?DimensionsPayload): boolean {
++  if (dims == null) {
++    return false;
++  }
++  const raw: {[string]: mixed} = (dims: $FlowFixMe);
++  const window =
++    dims.window ??
++    raw['window'] ??
++    raw.windowPhysicalPixels ??
++    raw['windowPhysicalPixels'];
++  return window != null;
++}
++
++function normalizeDimensionsPayload(
++  dims: $ReadOnly<DimensionsPayload>,
++): DimensionsPayload {
++  const raw: {[string]: mixed} = (dims: $FlowFixMe);
++  const window =
++    dims.window ??
++    raw['window'] ??
++    raw.windowPhysicalPixels ??
++    raw['windowPhysicalPixels'];
++  if (window != null) {
++    return dims;
++  }
++  return {
++    window: FALLBACK_METRICS,
++    screen: FALLBACK_METRICS,
++  };
++}
++
+ class Dimensions {
+   /**
+    * NOTE: `useWindowDimensions` is the preferred API for React components.
+@@ -45,8 +83,14 @@ class Dimensions {
+    */
+   static get(dim: string): DisplayMetrics | DisplayMetricsAndroid {
+     // $FlowFixMe[invalid-computed-prop]
+-    invariant(dimensions[dim], 'No dimension set for key ' + dim);
+-    return dimensions[dim];
++    if (dimensions?.[dim] != null) {
++      return dimensions[dim];
++    }
++    if (dim === 'window' || dim === 'screen') {
++      return FALLBACK_METRICS;
++    }
++    invariant(false, 'No dimension set for key ' + dim);
++    return FALLBACK_METRICS;
+   }
+ 
+   /**
+@@ -56,6 +100,7 @@ class Dimensions {
+    * @param {DimensionsPayload} dims Simple string-keyed object of dimensions to set
+    */
+   static set(dims: $ReadOnly<DimensionsPayload>): void {
++    dims = normalizeDimensionsPayload(dims);
+     // We calculate the window dimensions in JS so that we don't encounter loss of
+     // precision in transferring the dimensions (which could be non-integers) over
+     // the bridge.
+@@ -115,9 +160,12 @@ class Dimensions {
+ RCTDeviceEventEmitter.addListener(
+   'didUpdateDimensions',
+   (update: DimensionsPayload) => {
++    if (!hasWindowDimensions(update)) {
++      return;
++    }
+     Dimensions.set(update);
+   },
+ );
+-Dimensions.set(NativeDeviceInfo.getConstants().Dimensions);
++Dimensions.set(normalizeDimensionsPayload(NativeDeviceInfo.getConstants().Dimensions));
+ 
+ export default Dimensions;
+diff --git a/node_modules/react-native/Libraries/Utilities/Platform.ios.js b/node_modules/react-native/Libraries/Utilities/Platform.ios.js
+index a26a50f..1e40894 100644
+--- a/node_modules/react-native/Libraries/Utilities/Platform.ios.js
++++ b/node_modules/react-native/Libraries/Utilities/Platform.ios.js
+@@ -40,9 +40,18 @@ const Platform: PlatformType = {
+     isMacCatalyst?: boolean,
+   |} {
+     // $FlowFixMe[object-this-reference]
+-    if (this.__constants == null) {
+-      // $FlowFixMe[object-this-reference]
+-      this.__constants = NativePlatformConstantsIOS.getConstants();
++    if (
++      this.__constants == null ||
++      this.__constants.reactNativeVersion == null
++    ) {
++      const next = NativePlatformConstantsIOS.getConstants();
++      if (next?.reactNativeVersion != null) {
++        // $FlowFixMe[object-this-reference]
++        this.__constants = next;
++      } else {
++        // $FlowFixMe[object-this-reference]
++        return next;
++      }
+     }
+     // $FlowFixMe[object-this-reference]
+     return this.__constants;
+diff --git a/node_modules/react-native/React/Base/RCTRootView.m b/node_modules/react-native/React/Base/RCTRootView.m
+index 8938f41..bfb6ecd 100644
+--- a/node_modules/react-native/React/Base/RCTRootView.m
++++ b/node_modules/react-native/React/Base/RCTRootView.m
+@@ -264,7 +264,14 @@ - (void)bundleFinishedLoading:(RCTBridge *)bridge
+   }
+ 
+   [_contentView removeFromSuperview];
+-  _contentView = [[RCTRootContentView alloc] initWithFrame:self.bounds
++  CGRect contentFrame = self.bounds;
++  if (CGRectIsEmpty(contentFrame)) {
++    contentFrame = self.window.bounds;
++  }
++  if (CGRectIsEmpty(contentFrame)) {
++    contentFrame = [UIScreen mainScreen].bounds;
++  }
++  _contentView = [[RCTRootContentView alloc] initWithFrame:contentFrame
+                                                     bridge:bridge
+                                                   reactTag:self.reactTag
+                                            sizeFlexibility:_sizeFlexibility];
+@@ -272,6 +279,8 @@ - (void)bundleFinishedLoading:(RCTBridge *)bridge
+ 
+   _contentView.passThroughTouches = _passThroughTouches;
+   [self insertSubview:_contentView atIndex:0];
++  [self setNeedsLayout];
++  [self layoutIfNeeded];
+ 
+   if (_sizeFlexibility == RCTRootViewSizeFlexibilityNone) {
+     self.intrinsicContentSize = self.bounds.size;
+@@ -287,7 +296,10 @@ - (void)runApplication:(RCTBridge *)bridge
+   };
+ 
+   RCTLogInfo(@"Running application %@ (%@)", moduleName, appParameters);
+-  [bridge enqueueJSCall:@"AppRegistry" method:@"runApplication" args:@[ moduleName, appParameters ] completion:NULL];
++  [bridge enqueueJSCall:@"AppRegistry"
++                 method:@"runApplication"
++                   args:@[ moduleName, _contentView.reactTag, _appProperties ?: @{} ]
++             completion:NULL];
+ }
+ 
+ - (void)setSizeFlexibility:(RCTRootViewSizeFlexibility)sizeFlexibility
+diff --git a/node_modules/react-native/React/Base/RCTTouchEvent.m b/node_modules/react-native/React/Base/RCTTouchEvent.m
+index 4fb743f..d9b4b71 100644
+--- a/node_modules/react-native/React/Base/RCTTouchEvent.m
++++ b/node_modules/react-native/React/Base/RCTTouchEvent.m
+@@ -90,7 +90,20 @@ + (NSString *)moduleDotMethod
+ 
+ - (NSArray *)arguments
+ {
+-  return @[ RCTNormalizeInputEventName(_eventName), _reactTouches, _changedIndexes ];
++  NSMutableArray *touchTuples = [NSMutableArray arrayWithCapacity:_reactTouches.count];
++  for (NSDictionary *touch in _reactTouches) {
++    [touchTuples addObject:@[
++      touch[@"identifier"] ?: @0,
++      touch[@"target"] ?: @0,
++      touch[@"pageX"] ?: @0,
++      touch[@"pageY"] ?: @0,
++      touch[@"locationX"] ?: @0,
++      touch[@"locationY"] ?: @0,
++      touch[@"timestamp"] ?: @0,
++      touch[@"force"] ?: @0,
++    ]];
++  }
++  return @[ RCTNormalizeInputEventName(_eventName), touchTuples, _changedIndexes ];
+ }
+ 
+ - (uint16_t)coalescingKey
+diff --git a/node_modules/react-native/React/Base/Surface/RCTSurface.mm b/node_modules/react-native/React/Base/Surface/RCTSurface.mm
+index 2ff9a18..e1c3c1e 100644
+--- a/node_modules/react-native/React/Base/Surface/RCTSurface.mm
++++ b/node_modules/react-native/React/Base/Surface/RCTSurface.mm
+@@ -587,7 +587,10 @@ - (void)mountReactComponentWithBridge:(RCTBridge *)bridge
+                            moduleName:(NSString *)moduleName
+                                params:(NSDictionary *)params
+ {
+-  [bridge enqueueJSCall:@"AppRegistry" method:@"runApplication" args:@[ moduleName, params ] completion:NULL];
++  [bridge enqueueJSCall:@"AppRegistry"
++                 method:@"runApplication"
++                   args:@[ moduleName, params[@"rootTag"], params[@"initialProps"] ?: @{} ]
++             completion:NULL];
+ }
+ 
+ - (void)unmountReactComponentWithBridge:(RCTBridge *)bridge rootViewTag:(NSNumber *)rootViewTag
+diff --git a/node_modules/react-native/src/private/specs/modules/NativeDeviceInfo.js b/node_modules/react-native/src/private/specs/modules/NativeDeviceInfo.js
+index 44c1820..1bc1394 100644
+--- a/node_modules/react-native/src/private/specs/modules/NativeDeviceInfo.js
++++ b/node_modules/react-native/src/private/specs/modules/NativeDeviceInfo.js
+@@ -46,12 +46,35 @@ export interface Spec extends TurboModule {
+ const NativeModule: Spec = TurboModuleRegistry.getEnforcing<Spec>('DeviceInfo');
+ let constants: ?DeviceInfoConstants = null;
+ 
++const FALLBACK_DIMENSIONS: DimensionsPayload = {
++  window: {width: 390, height: 844, scale: 3, fontScale: 1},
++  screen: {width: 390, height: 844, scale: 3, fontScale: 1},
++};
++
++function hasWindowDimensions(dims: ?DimensionsPayload): boolean {
++  if (dims == null) {
++    return false;
++  }
++  return (
++    dims.window != null ||
++    dims['window'] != null ||
++    dims.windowPhysicalPixels != null ||
++    dims['windowPhysicalPixels'] != null
++  );
++}
++
+ const NativeDeviceInfo = {
+   getConstants(): DeviceInfoConstants {
+-    if (constants == null) {
+-      constants = NativeModule.getConstants();
++    if (constants == null || !hasWindowDimensions(constants.Dimensions)) {
++      const next = NativeModule.getConstants();
++      if (hasWindowDimensions(next?.Dimensions)) {
++        constants = next;
++      }
++    }
++    if (constants != null && hasWindowDimensions(constants.Dimensions)) {
++      return constants;
+     }
+-    return constants;
++    return {Dimensions: FALLBACK_DIMENSIONS};
+   },
+ };
+ 

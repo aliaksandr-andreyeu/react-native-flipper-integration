@@ -3,9 +3,6 @@ name: Example iOS Build
 on:
   workflow_dispatch:
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 concurrency:
   group: example-ios-${{ github.ref }}
   cancel-in-progress: true
@@ -18,7 +15,7 @@ jobs:
 
       - uses: actions/setup-node@v6
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
 
       - name: Install root dependencies
@@ -29,25 +26,25 @@ jobs:
 
       - name: Install example dependencies
         run: npm ci
-        working-directory: example
+        working-directory: examples/bare-new-arch
 
       - name: Pod install
-        working-directory: example/ios
+        working-directory: examples/bare-new-arch/ios
         run: |
           NO_FLIPPER=1 pod install
 
       - name: Verify Xcode scheme
-        working-directory: example/ios
+        working-directory: examples/bare-new-arch/ios
         run: |
-          xcodebuild -workspace FlipperIntegrationExample.xcworkspace -list
-          xcodebuild -workspace FlipperIntegrationExample.xcworkspace -list | grep -q "FlipperIntegrationExample"
+          xcodebuild -workspace FlipperKitBareNewArch.xcworkspace -list
+          xcodebuild -workspace FlipperKitBareNewArch.xcworkspace -list | grep -q "FlipperKitBareNewArch"
 
       - name: Build iOS Simulator app
-        working-directory: example/ios
+        working-directory: examples/bare-new-arch/ios
         run: |
           xcodebuild \
-            -workspace FlipperIntegrationExample.xcworkspace \
-            -scheme FlipperIntegrationExample \
+            -workspace FlipperKitBareNewArch.xcworkspace \
+            -scheme FlipperKitBareNewArch \
             -configuration Debug \
             -sdk iphonesimulator \
             -destination 'generic/platform=iOS Simulator' \

@@ -1,0 +1,159 @@
+name: Example E2E (Maestro)
+
+# On-demand only — the Maestro E2E (APK build + Android emulator / iOS simulator) is
+# heavy and never part of the required merge gate. Trigger it manually when needed.
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: example-e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Pin Maestro for reproducible E2E runs (the install script honors $MAESTRO_VERSION).
+  # Bump deliberately when validating a new release.
+  MAESTRO_VERSION: 2.6.1
+
+jobs:
+  maestro:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            examples/bare-new-arch/package-lock.json
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Build library TypeScript
+        run: npm run build
+
+      - name: Install example dependencies
+        run: npm ci
+        working-directory: examples/bare-new-arch
+
+      - name: Bundle JavaScript for Android
+        working-directory: examples/bare-new-arch
+        run: |
+          mkdir -p android/app/src/main/assets
+          npx react-native bundle \
+            --platform android \
+            --dev true \
+            --entry-file index.js \
+            --bundle-output android/app/src/main/assets/index.android.bundle \
+            --assets-dest android/app/src/main/res
+
+      - name: Assemble example Debug APK (x86_64)
+        working-directory: examples/bare-new-arch/android
+        run: chmod +x gradlew && ./gradlew assembleDebug -PreactNativeArchitectures=x86_64 --no-daemon
+
+      - name: Install Maestro
+        run: |
+          curl -fsSL "https://get.maestro.mobile.dev" | bash
+          echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
+
+      - name: Run Maestro smoke test on emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          force-avd-creation: false
+          disable-animations: true
+          emulator-options: -no-snapshot -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect
+          script: |
+            adb install -r examples/bare-new-arch/android/app/build/outputs/apk/debug/app-debug.apk
+            maestro test examples/bare-new-arch/.maestro/smoke.yaml
+
+  maestro-ios:
+    # macOS runner — slow and costly. The whole workflow is manual-dispatch only, so this
+    # runs alongside the Android job whenever you trigger it.
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            examples/bare-new-arch/package-lock.json
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Build library TypeScript
+        run: npm run build
+
+      - name: Install example dependencies
+        run: npm ci
+        working-directory: examples/bare-new-arch
+
+      - name: Pod install
+        working-directory: examples/bare-new-arch/ios
+        run: pod install
+
+      # Release config for the simulator: the JS bundle is embedded (no Metro needed,
+      # far less flaky) and FlipperKit is NOT linked (it is debug-only by default), so
+      # this sidesteps FlipperKit's Apple-Silicon simulator build issues. The smoke test
+      # verifies the native module links and the JS API renders on a real iOS app launch.
+      - name: Build iOS app for simulator (Release, embedded bundle)
+        working-directory: examples/bare-new-arch/ios
+        run: |
+          xcodebuild \
+            -workspace FlipperKitBareNewArch.xcworkspace \
+            -scheme FlipperKitBareNewArch \
+            -configuration Release \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - name: Boot iOS simulator
+        run: |
+          UDID=$(xcrun simctl list devices available --json \
+            | python3 -c "import sys,json; d=json.load(sys.stdin)['devices']; print(next(x['udid'] for rt in d for x in d[rt] if 'iPhone' in x['name']))")
+          echo "SIM_UDID=$UDID" >> "$GITHUB_ENV"
+          xcrun simctl boot "$UDID"
+          xcrun simctl bootstatus "$UDID"
+
+      - name: Install app on simulator
+        run: |
+          APP=$(find examples/bare-new-arch/ios/build/Build/Products/Release-iphonesimulator -maxdepth 1 -name '*.app' | head -1)
+          test -n "$APP" || { echo 'Built .app not found'; exit 1; }
+          xcrun simctl install "$SIM_UDID" "$APP"
+
+      - name: Install idb-companion (required by Maestro for iOS)
+        run: |
+          brew tap facebook/fb
+          brew install idb-companion
+
+      - name: Install Maestro
+        run: |
+          curl -fsSL "https://get.maestro.mobile.dev" | bash
+          echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
+
+      - name: Run Maestro smoke test on simulator
+        run: maestro test examples/bare-new-arch/.maestro/smoke.yaml
