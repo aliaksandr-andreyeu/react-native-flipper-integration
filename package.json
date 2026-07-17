@@ -75,9 +75,9 @@
     }
   },
   "devDependencies": {
-    "@eslint/js": "^9.39.0",
+    "@eslint/js": "^9.39.5",
     "@expo/config-plugins": "^10.0.0",
-    "@react-native/babel-preset": "0.85.3",
+    "@react-native/babel-preset": "0.86.0",
     "@types/jest": "^30.0.0",
     "@types/react": "^19.0.0",
     "babel-jest": "^30.0.0",
@@ -90,11 +90,11 @@
     "jest": "^30.0.0",
     "lint-staged": "^16.2.0",
     "lockfile-lint": "5.0.0",
-    "prettier": "^3.6.0",
+    "prettier": "^3.8.4",
     "react": "19.2.3",
     "react-native": "0.85.0",
     "typescript": "^5.8.0",
-    "typescript-eslint": "^8.46.0"
+    "typescript-eslint": "^8.64.0"
   },
   "codegenConfig": {
     "name": "RNFlipperKitSpec",
