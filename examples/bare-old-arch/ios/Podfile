@@ -1,0 +1,81 @@
+# Resolve react_native_pods.rb with node to allow for hoisting
+require Pod::Executable.execute_command('node', ['-p',
+  'require.resolve(
+    "react-native/scripts/react_native_pods.rb",
+    {paths: [process.argv[1]]},
+  )', __dir__]).strip
+
+platform :ios, min_ios_version_supported
+prepare_react_native_project!
+
+# Old Architecture (Paper bridge). RN 0.76 still supports it; mirrors android/gradle.properties.
+ENV['RCT_NEW_ARCH_ENABLED'] ||= '0'
+
+ENV['FLIPPER_DEBUG_ONLY'] ||= 'true'
+ENV['FLIPPER_AUTO_INIT'] ||= 'false'
+# Default: FlipperKit pods ARE linked (NO_FLIPPER=0). KNOWN LIMITATION: on Old-Arch iOS this
+# breaks the Paper bridge at runtime (white screen) — FlipperKit's frozen Flipper-Folly vs RN's
+# RCT-Folly ABI conflict corrupts folly::dynamic marshalling. Verified: `NO_FLIPPER=1 pod install`
+# (unlink Flipper) makes the app work fully. See README "iOS root cause" + root README Troubleshooting.
+ENV['NO_FLIPPER'] ||= '0'
+
+linkage = ENV['USE_FRAMEWORKS']
+if linkage != nil
+  Pod::UI.puts "Configuring Pod with #{linkage}ally linked Frameworks".green
+  use_frameworks! :linkage => linkage.to_sym
+end
+
+target 'FlipperKitBareOldArch' do
+  config = use_native_modules!
+
+  use_react_native!(
+    :path => config[:reactNativePath],
+    :app_path => "#{Pod::Config.instance.installation_root}/.."
+  )
+
+  target 'FlipperKitBareOldArchTests' do
+    inherit! :complete
+  end
+
+  post_install do |installer|
+    react_native_post_install(
+      installer,
+      config[:reactNativePath],
+      :mac_catalyst_enabled => false,
+    )
+
+    cache_locality = File.join(
+      installer.sandbox.root, 'Flipper-Folly', 'folly', 'concurrency', 'CacheLocality.h'
+    )
+    if File.exist?(cache_locality)
+      original = File.read(cache_locality)
+      patched = original.gsub(
+        'std::is_trivial<GlobalState>::value',
+        'std::is_trivially_destructible<GlobalState>::value'
+      )
+      if patched != original
+        File.write(cache_locality, patched)
+        Pod::UI.puts '[react-native-flipper-kit] Patched Flipper-Folly CacheLocality.h'.green
+      end
+    end
+
+    installer.pods_project.targets.each do |target|
+      target.build_configurations.each do |config|
+        config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.6'
+        config.build_settings['ENABLE_USER_SCRIPT_SANDBOXING'] = 'NO'
+
+        if target.name == 'fmt'
+          config.build_settings['CLANG_CXX_LANGUAGE_STANDARD'] = 'c++17'
+        end
+
+        if target.name.start_with?('Flipper')
+          flipper_boost = '"$(PODS_ROOT)/Flipper-Boost-iOSX"'
+          hsp = config.build_settings['HEADER_SEARCH_PATHS'] || ['$(inherited)']
+          hsp = [hsp] if hsp.is_a?(String)
+          hsp.unshift(flipper_boost) unless hsp.include?(flipper_boost)
+          config.build_settings['HEADER_SEARCH_PATHS'] = hsp
+        end
+      end
+    end
+  end
+end

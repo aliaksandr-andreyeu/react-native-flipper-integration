@@ -1,0 +1,584 @@
+diff --git a/node_modules/react-native/Libraries/Core/Devtools/getDevServer.js b/node_modules/react-native/Libraries/Core/Devtools/getDevServer.js
+index a158d98..a851d68 100644
+--- a/node_modules/react-native/Libraries/Core/Devtools/getDevServer.js
++++ b/node_modules/react-native/Libraries/Core/Devtools/getDevServer.js
+@@ -27,8 +27,11 @@ type DevServerInfo = {
+  */
+ export default function getDevServer(): DevServerInfo {
+   if (_cachedDevServerURL === undefined) {
++    // On Old Architecture the SourceCode module can be lazy — getConstants() may return {}
++    // before scriptURL is populated. Optional chaining avoids a startup crash; FALLBACK below
++    // still applies when the match is null.
+     const scriptUrl = NativeSourceCode.getConstants().scriptURL;
+-    const match = scriptUrl.match(/^https?:\/\/.*?\//);
++    const match = scriptUrl?.match(/^https?:\/\/.*?\//);
+     _cachedDevServerURL = match ? match[0] : null;
+     _cachedFullBundleURL = match ? scriptUrl : null;
+   }
+diff --git a/node_modules/react-native/Libraries/Core/ReactNativeVersionCheck.js b/node_modules/react-native/Libraries/Core/ReactNativeVersionCheck.js
+index 7ed749f..7781d5d 100644
+--- a/node_modules/react-native/Libraries/Core/ReactNativeVersionCheck.js
++++ b/node_modules/react-native/Libraries/Core/ReactNativeVersionCheck.js
+@@ -23,6 +23,10 @@ const ReactNativeVersion = require('./ReactNativeVersion');
+  */
+ export function checkVersions(): void {
+   const nativeVersion = Platform.constants.reactNativeVersion;
++  // On Old Architecture PlatformConstants can be lazy — skip until initialize() runs.
++  if (nativeVersion == null) {
++    return;
++  }
+   if (
+     ReactNativeVersion.version.major !== nativeVersion.major ||
+     ReactNativeVersion.version.minor !== nativeVersion.minor
+diff --git a/node_modules/react-native/Libraries/Core/setUpReactDevTools.js b/node_modules/react-native/Libraries/Core/setUpReactDevTools.js
+index 9bdf66b..04a707c 100644
+--- a/node_modules/react-native/Libraries/Core/setUpReactDevTools.js
++++ b/node_modules/react-native/Libraries/Core/setUpReactDevTools.js
+@@ -188,33 +188,39 @@ if (__DEV__) {
+     }
+   }
+ 
+-  // 1. If React DevTools has already been opened and initialized in Fusebox, bindings survive reloads
+-  if (global[reactDevToolsFuseboxGlobalBindingName] != null) {
+-    disconnectBackendFromReactDevToolsInFuseboxIfNeeded();
+-    const domain =
+-      fuseboxReactDevToolsDispatcher.initializeDomain('react-devtools');
+-    connectToReactDevToolsInFusebox(domain);
+-  }
++  // Old Arch Paper: Fusebox / Metro `j` DevTools need the C++ CDP bridge (New Arch).
++  // On RN 0.81 Paper they time out (HeadersTimeoutError) and can race runApplication.
++  const isOldArchPaper =
++    global.RN$Bridgeless !== true && global.nativeFabricUIManager == null;
++  if (!isOldArchPaper) {
++    // 1. If React DevTools has already been opened and initialized in Fusebox, bindings survive reloads
++    if (global[reactDevToolsFuseboxGlobalBindingName] != null) {
++      disconnectBackendFromReactDevToolsInFuseboxIfNeeded();
++      const domain =
++        fuseboxReactDevToolsDispatcher.initializeDomain('react-devtools');
++      connectToReactDevToolsInFusebox(domain);
++    }
+ 
+-  // 2. If React DevTools panel in Fusebox was opened for the first time after the runtime has been created
+-  // 2. OR if React DevTools frontend was re-initialized: Chrome DevTools was closed and then re-opened
+-  global.__FUSEBOX_REACT_DEVTOOLS_DISPATCHER__.onDomainInitialization.addEventListener(
+-    (domain: Domain) => {
+-      if (domain.name === 'react-devtools') {
+-        disconnectBackendFromReactDevToolsInFuseboxIfNeeded();
+-        connectToReactDevToolsInFusebox(domain);
+-      }
+-    },
+-  );
++    // 2. If React DevTools panel in Fusebox was opened for the first time after the runtime has been created
++    // 2. OR if React DevTools frontend was re-initialized: Chrome DevTools was closed and then re-opened
++    global.__FUSEBOX_REACT_DEVTOOLS_DISPATCHER__.onDomainInitialization.addEventListener(
++      (domain: Domain) => {
++        if (domain.name === 'react-devtools') {
++          disconnectBackendFromReactDevToolsInFuseboxIfNeeded();
++          connectToReactDevToolsInFusebox(domain);
++        }
++      },
++    );
+ 
+-  // 3. Fallback to attempting to connect WS-based RDT frontend
+-  const RCTNativeAppEventEmitter =
+-    require('../EventEmitter/RCTNativeAppEventEmitter').default;
+-  RCTNativeAppEventEmitter.addListener(
+-    'RCTDevMenuShown',
+-    connectToWSBasedReactDevToolsFrontend,
+-  );
+-  connectToWSBasedReactDevToolsFrontend(); // Try connecting once on load
++    // 3. Fallback to attempting to connect WS-based RDT frontend
++    const RCTNativeAppEventEmitter =
++      require('../EventEmitter/RCTNativeAppEventEmitter').default;
++    RCTNativeAppEventEmitter.addListener(
++      'RCTDevMenuShown',
++      connectToWSBasedReactDevToolsFrontend,
++    );
++    connectToWSBasedReactDevToolsFrontend(); // Try connecting once on load
++  }
+ }
+ 
+ function readReloadAndProfileConfig(
+diff --git a/node_modules/react-native/Libraries/EventEmitter/RCTEventEmitter.js b/node_modules/react-native/Libraries/EventEmitter/RCTEventEmitter.js
+index 069caed..f35e36b 100644
+--- a/node_modules/react-native/Libraries/EventEmitter/RCTEventEmitter.js
++++ b/node_modules/react-native/Libraries/EventEmitter/RCTEventEmitter.js
+@@ -12,9 +12,82 @@
+ 
+ import registerCallableModule from '../Core/registerCallableModule';
+ 
++const TOUCH_TUPLE_FIELDS = [
++  'identifier',
++  'target',
++  'pageX',
++  'pageY',
++  'locationX',
++  'locationY',
++  'timestamp',
++  'force',
++] as const;
++
++function touchFromTuple(tuple: ReadonlyArray<mixed>): {[string]: mixed} {
++  const touch: {[string]: mixed} = {};
++  for (let i = 0; i < TOUCH_TUPLE_FIELDS.length; i++) {
++    const value = tuple[i];
++    if (value != null) {
++      touch[TOUCH_TUPLE_FIELDS[i]] = value;
++    }
++  }
++  return touch;
++}
++
++// Old Arch Paper: NSDictionary touch records can arrive without enumerable keys.
++function normalizeTouches(touches: mixed): mixed {
++  if (!Array.isArray(touches) || touches.length === 0) {
++    return touches;
++  }
++
++  if (Array.isArray(touches[0])) {
++    return touches.map(touchFromTuple);
++  }
++
++  return touches.map((touch: mixed) => {
++    if (touch == null || typeof touch !== 'object') {
++      return touch;
++    }
++    const record = touch as {[string]: mixed};
++    if (record.identifier != null) {
++      return touch;
++    }
++    const identifier = record['identifier'];
++    if (identifier == null) {
++      return touch;
++    }
++    return {
++      identifier,
++      target: record.target ?? record['target'],
++      pageX: record.pageX ?? record['pageX'],
++      pageY: record.pageY ?? record['pageY'],
++      locationX: record.locationX ?? record['locationX'],
++      locationY: record.locationY ?? record['locationY'],
++      timestamp: record.timestamp ?? record['timestamp'],
++      force: record.force ?? record['force'],
++    };
++  });
++}
++
+ const RCTEventEmitter = {
+-  register(eventEmitter: any) {
+-    registerCallableModule('RCTEventEmitter', eventEmitter);
++  register(eventEmitter: {
++    receiveEvent: (...args: Array<mixed>) => void;
++    receiveTouches: (...args: Array<mixed>) => void;
++  }) {
++    registerCallableModule('RCTEventEmitter', {
++      receiveEvent: eventEmitter.receiveEvent,
++      receiveTouches(
++        eventTopLevelType: string,
++        touches: mixed,
++        changedIndices: mixed,
++      ) {
++        return eventEmitter.receiveTouches(
++          eventTopLevelType,
++          normalizeTouches(touches),
++          changedIndices,
++        );
++      },
++    });
+   },
+ };
+ 
+diff --git a/node_modules/react-native/Libraries/ReactNative/AppRegistry.js b/node_modules/react-native/Libraries/ReactNative/AppRegistry.js
+index 8e7162b..ff012ea 100644
+--- a/node_modules/react-native/Libraries/ReactNative/AppRegistry.js
++++ b/node_modules/react-native/Libraries/ReactNative/AppRegistry.js
+@@ -35,6 +35,15 @@ global.RN$SurfaceRegistry = {
+   setSurfaceProps: AppRegistry.setSurfaceProps,
+ };
+ 
+-registerCallableModule('AppRegistry', AppRegistry);
++// Plain object for BatchedBridge — ES module namespace objects can confuse arg
++// marshalling on Old Arch Paper (runApplication receives `{}` instead of rootTag).
++registerCallableModule('AppRegistry', {
++  runApplication: AppRegistry.runApplication,
++  setSurfaceProps: AppRegistry.setSurfaceProps,
++  unmountApplicationComponentAtRootTag:
++    AppRegistry.unmountApplicationComponentAtRootTag,
++  startHeadlessTask: AppRegistry.startHeadlessTask,
++  cancelHeadlessTask: AppRegistry.cancelHeadlessTask,
++});
+ 
+ export {AppRegistry};
+diff --git a/node_modules/react-native/Libraries/ReactNative/AppRegistryImpl.js b/node_modules/react-native/Libraries/ReactNative/AppRegistryImpl.js
+index 8f8db1c..8613d05 100644
+--- a/node_modules/react-native/Libraries/ReactNative/AppRegistryImpl.js
++++ b/node_modules/react-native/Libraries/ReactNative/AppRegistryImpl.js
+@@ -151,6 +151,61 @@ export function setComponentProviderInstrumentationHook(
+   componentProviderInstrumentationHook = hook;
+ }
+ 
++// Old Arch Paper: NSDictionary-backed params may not expose enumerable keys.
++function normalizeAppParameters(appParameters: AppParameters): AppParameters {
++  if (appParameters?.rootTag != null) {
++    return appParameters;
++  }
++  const raw: {[string]: mixed} = (appParameters: $FlowFixMe) ?? {};
++  const rootTag = raw.rootTag ?? raw['rootTag'];
++  const initialProps = raw.initialProps ?? raw['initialProps'] ?? {};
++  if (rootTag != null) {
++    return {
++      rootTag,
++      initialProps,
++      fabric: raw.fabric ?? raw['fabric'],
++    };
++  }
++  return appParameters;
++}
++
++// Native may pass (appKey, rootTag, initialProps) when NSDictionary marshalling is broken.
++function resolveRunApplicationParams(
++  appParametersOrRootTag: AppParameters | number,
++  maybeInitialProps?: mixed,
++): AppParameters {
++  if (typeof appParametersOrRootTag === 'number') {
++    const initialProps =
++      maybeInitialProps != null &&
++      typeof maybeInitialProps === 'object' &&
++      !Array.isArray(maybeInitialProps)
++        ? maybeInitialProps
++        : {};
++    return {rootTag: appParametersOrRootTag, initialProps};
++  }
++  return normalizeAppParameters(appParametersOrRootTag);
++}
++
++function resolveRunApplicationDisplayMode(
++  appParametersOrRootTag: AppParameters | number,
++  second?: mixed,
++  third?: number,
++): ?number {
++  if (typeof appParametersOrRootTag === 'number') {
++    if (typeof third === 'number') {
++      return third;
++    }
++    if (typeof second === 'number') {
++      return second;
++    }
++    return undefined;
++  }
++  if (typeof second === 'number') {
++    return second;
++  }
++  return undefined;
++}
++
+ /**
+  * Loads the JavaScript bundle and runs the app.
+  *
+@@ -158,11 +213,23 @@ export function setComponentProviderInstrumentationHook(
+  */
+ export function runApplication(
+   appKey: string,
+-  appParameters: AppParameters,
+-  displayMode?: number,
++  appParametersOrRootTag: AppParameters | number,
++  maybeInitialPropsOrDisplayMode?: mixed,
++  maybeDisplayMode?: number,
+ ): void {
++  const params = resolveRunApplicationParams(
++    appParametersOrRootTag,
++    typeof appParametersOrRootTag === 'number'
++      ? maybeInitialPropsOrDisplayMode
++      : undefined,
++  );
++  const displayMode = resolveRunApplicationDisplayMode(
++    appParametersOrRootTag,
++    maybeInitialPropsOrDisplayMode,
++    maybeDisplayMode,
++  );
+   if (appKey !== 'LogBox') {
+-    const logParams = __DEV__ ? ` with ${JSON.stringify(appParameters)}` : '';
++    const logParams = __DEV__ ? ` with ${JSON.stringify(params)}` : '';
+     const msg = `Running "${appKey}"${logParams}`;
+     console.log(msg);
+   }
+@@ -175,7 +242,7 @@ export function runApplication(
+   );
+ 
+   SceneTracker.setActiveScene({name: appKey});
+-  runnables[appKey](appParameters, coerceDisplayMode(displayMode));
++  runnables[appKey](params, coerceDisplayMode(displayMode));
+ }
+ 
+ /**
+@@ -202,7 +269,10 @@ export function setSurfaceProps(
+       "* A module failed to load due to an error and `AppRegistry.registerComponent` wasn't called.",
+   );
+ 
+-  runnables[appKey](appParameters, coerceDisplayMode(displayMode));
++  runnables[appKey](
++    normalizeAppParameters(appParameters),
++    coerceDisplayMode(displayMode),
++  );
+ }
+ 
+ /**
+diff --git a/node_modules/react-native/Libraries/Settings/Settings.ios.js b/node_modules/react-native/Libraries/Settings/Settings.ios.js
+index 00f8449..bb6cdb6 100644
+--- a/node_modules/react-native/Libraries/Settings/Settings.ios.js
++++ b/node_modules/react-native/Libraries/Settings/Settings.ios.js
+@@ -19,8 +19,11 @@ const subscriptions: Array<{
+ }> = [];
+ 
+ const Settings = {
+-  _settings: (NativeSettingsManager &&
+-    NativeSettingsManager.getConstants().settings: any),
++  // On Old Architecture SettingsManager constants can be lazy — default to {} so
++  // get()/set() do not throw during early React DevTools setup.
++  _settings: ((NativeSettingsManager &&
++    NativeSettingsManager.getConstants()?.settings) ||
++    {}: any),
+ 
+   get(key: string): mixed {
+     // $FlowFixMe[object-this-reference]
+diff --git a/node_modules/react-native/Libraries/Utilities/Dimensions.js b/node_modules/react-native/Libraries/Utilities/Dimensions.js
+index 8ae066c..9fac458 100644
+--- a/node_modules/react-native/Libraries/Utilities/Dimensions.js
++++ b/node_modules/react-native/Libraries/Utilities/Dimensions.js
+@@ -30,6 +30,44 @@ const eventEmitter = new EventEmitter<{
+ let dimensionsInitialized = false;
+ let dimensions: DimensionsPayload;
+ 
++const FALLBACK_METRICS: DisplayMetrics = {
++  width: 390,
++  height: 844,
++  scale: 3,
++  fontScale: 1,
++};
++
++function hasWindowDimensions(dims: ?DimensionsPayload): boolean {
++  if (dims == null) {
++    return false;
++  }
++  const raw: {[string]: mixed} = (dims: $FlowFixMe);
++  const window =
++    dims.window ??
++    raw['window'] ??
++    raw.windowPhysicalPixels ??
++    raw['windowPhysicalPixels'];
++  return window != null;
++}
++
++function normalizeDimensionsPayload(
++  dims: $ReadOnly<DimensionsPayload>,
++): DimensionsPayload {
++  const raw: {[string]: mixed} = (dims: $FlowFixMe);
++  const window =
++    dims.window ??
++    raw['window'] ??
++    raw.windowPhysicalPixels ??
++    raw['windowPhysicalPixels'];
++  if (window != null) {
++    return dims;
++  }
++  return {
++    window: FALLBACK_METRICS,
++    screen: FALLBACK_METRICS,
++  };
++}
++
+ class Dimensions {
+   /**
+    * NOTE: `useWindowDimensions` is the preferred API for React components.
+@@ -50,8 +88,14 @@ class Dimensions {
+    */
+   static get(dim: string): DisplayMetrics | DisplayMetricsAndroid {
+     // $FlowFixMe[invalid-computed-prop]
+-    invariant(dimensions[dim], 'No dimension set for key ' + dim);
+-    return dimensions[dim];
++    if (dimensions?.[dim] != null) {
++      return dimensions[dim];
++    }
++    if (dim === 'window' || dim === 'screen') {
++      return FALLBACK_METRICS;
++    }
++    invariant(false, 'No dimension set for key ' + dim);
++    return FALLBACK_METRICS;
+   }
+ 
+   /**
+@@ -61,6 +105,7 @@ class Dimensions {
+    * @param {DimensionsPayload} dims Simple string-keyed object of dimensions to set
+    */
+   static set(dims: $ReadOnly<DimensionsPayload>): void {
++    dims = normalizeDimensionsPayload(dims);
+     // We calculate the window dimensions in JS so that we don't encounter loss of
+     // precision in transferring the dimensions (which could be non-integers) over
+     // the bridge.
+@@ -120,9 +165,14 @@ class Dimensions {
+ RCTDeviceEventEmitter.addListener(
+   'didUpdateDimensions',
+   (update: DimensionsPayload) => {
++    // Paper bridge may deliver an empty Dimensions dict — keep existing metrics.
++    if (!hasWindowDimensions(update)) {
++      return;
++    }
+     Dimensions.set(update);
+   },
+ );
+-Dimensions.set(NativeDeviceInfo.getConstants().Dimensions);
++// On Old Architecture DeviceInfo constants can be lazy — didUpdateDimensions updates later.
++Dimensions.set(normalizeDimensionsPayload(NativeDeviceInfo.getConstants().Dimensions));
+ 
+ export default Dimensions;
+diff --git a/node_modules/react-native/Libraries/Utilities/Platform.ios.js b/node_modules/react-native/Libraries/Utilities/Platform.ios.js
+index 81cfd77..1fccfce 100644
+--- a/node_modules/react-native/Libraries/Utilities/Platform.ios.js
++++ b/node_modules/react-native/Libraries/Utilities/Platform.ios.js
+@@ -37,9 +37,19 @@ const Platform: PlatformType = {
+     isMacCatalyst?: boolean,
+   } {
+     // $FlowFixMe[object-this-reference]
+-    if (this.__constants == null) {
+-      // $FlowFixMe[object-this-reference]
+-      this.__constants = NativePlatformConstantsIOS.getConstants();
++    if (
++      this.__constants == null ||
++      this.__constants.reactNativeVersion == null
++    ) {
++      const next = NativePlatformConstantsIOS.getConstants();
++      // On Old Architecture PlatformConstants can be lazy — don't cache before initialize().
++      if (next?.reactNativeVersion != null) {
++        // $FlowFixMe[object-this-reference]
++        this.__constants = next;
++      } else {
++        // $FlowFixMe[object-this-reference]
++        return next;
++      }
+     }
+     // $FlowFixMe[object-this-reference]
+     return this.__constants;
+diff --git a/node_modules/react-native/React/Base/RCTRootView.m b/node_modules/react-native/React/Base/RCTRootView.m
+index cbfdc20..871aa82 100644
+--- a/node_modules/react-native/React/Base/RCTRootView.m
++++ b/node_modules/react-native/React/Base/RCTRootView.m
+@@ -289,7 +289,11 @@ - (void)runApplication:(RCTBridge *)bridge
+   };
+ 
+   RCTLogInfo(@"Running application %@ (%@)", moduleName, appParameters);
+-  [bridge enqueueJSCall:@"AppRegistry" method:@"runApplication" args:@[ moduleName, appParameters ] completion:NULL];
++  // Old Arch Paper: NSDictionary params can arrive in JS as {} — pass rootTag separately.
++  [bridge enqueueJSCall:@"AppRegistry"
++                 method:@"runApplication"
++                   args:@[ moduleName, _contentView.reactTag, _appProperties ?: @{} ]
++             completion:NULL];
+ }
+ 
+ - (void)setSizeFlexibility:(RCTRootViewSizeFlexibility)sizeFlexibility
+diff --git a/node_modules/react-native/React/Base/RCTTouchEvent.m b/node_modules/react-native/React/Base/RCTTouchEvent.m
+index 42783d2..46a989c 100644
+--- a/node_modules/react-native/React/Base/RCTTouchEvent.m
++++ b/node_modules/react-native/React/Base/RCTTouchEvent.m
+@@ -90,7 +90,21 @@ + (NSString *)moduleDotMethod
+ 
+ - (NSArray *)arguments
+ {
+-  return @[ RCTNormalizeInputEventName(_eventName), _reactTouches, _changedIndexes ];
++  // Old Arch Paper: NSDictionary touches can arrive in JS without enumerable keys — send tuples.
++  NSMutableArray *touchTuples = [NSMutableArray arrayWithCapacity:_reactTouches.count];
++  for (NSDictionary *touch in _reactTouches) {
++    [touchTuples addObject:@[
++      touch[@"identifier"] ?: @0,
++      touch[@"target"] ?: @0,
++      touch[@"pageX"] ?: @0,
++      touch[@"pageY"] ?: @0,
++      touch[@"locationX"] ?: @0,
++      touch[@"locationY"] ?: @0,
++      touch[@"timestamp"] ?: @0,
++      touch[@"force"] ?: @0,
++    ]];
++  }
++  return @[ RCTNormalizeInputEventName(_eventName), touchTuples, _changedIndexes ];
+ }
+ 
+ - (uint16_t)coalescingKey
+diff --git a/node_modules/react-native/React/Base/Surface/RCTSurface.mm b/node_modules/react-native/React/Base/Surface/RCTSurface.mm
+index 14f88de..4a2c515 100644
+--- a/node_modules/react-native/React/Base/Surface/RCTSurface.mm
++++ b/node_modules/react-native/React/Base/Surface/RCTSurface.mm
+@@ -589,7 +589,11 @@ - (void)mountReactComponentWithBridge:(RCTBridge *)bridge
+                            moduleName:(NSString *)moduleName
+                                params:(NSDictionary *)params
+ {
+-  [bridge enqueueJSCall:@"AppRegistry" method:@"runApplication" args:@[ moduleName, params ] completion:NULL];
++  // Old Arch Paper: NSDictionary params can arrive in JS as {} — pass rootTag separately.
++  [bridge enqueueJSCall:@"AppRegistry"
++                 method:@"runApplication"
++                   args:@[ moduleName, params[@"rootTag"], params[@"initialProps"] ?: @{} ]
++             completion:NULL];
+ }
+ 
+ - (void)unmountReactComponentWithBridge:(RCTBridge *)bridge rootViewTag:(NSNumber *)rootViewTag
+diff --git a/node_modules/react-native/src/private/setup/setUpDefaultReactNativeEnvironment.js b/node_modules/react-native/src/private/setup/setUpDefaultReactNativeEnvironment.js
+index d35bf80..20aef01 100644
+--- a/node_modules/react-native/src/private/setup/setUpDefaultReactNativeEnvironment.js
++++ b/node_modules/react-native/src/private/setup/setUpDefaultReactNativeEnvironment.js
+@@ -37,7 +37,13 @@ export default function setUpDefaltReactNativeEnvironment(
+   if (__DEV__ && enableDeveloperTools) {
+     require('../../../Libraries/Core/checkNativeVersion');
+     require('../../../Libraries/Core/setUpDeveloperTools');
+-    require('../../../Libraries/LogBox/LogBox').default.install();
++    // Old Arch Paper: LogBox mounts via RCTSurface and races bridge startup on RN 0.81.
++    // Redbox / Metro logs still work; skip LogBox.install in this example.
++    const isOldArchPaper =
++      global.RN$Bridgeless !== true && global.nativeFabricUIManager == null;
++    if (!isOldArchPaper) {
++      require('../../../Libraries/LogBox/LogBox').default.install();
++    }
+   }
+ 
+   require('../../../Libraries/ReactNative/AppRegistry');
+diff --git a/node_modules/react-native/src/private/specs_DEPRECATED/modules/NativeDeviceInfo.js b/node_modules/react-native/src/private/specs_DEPRECATED/modules/NativeDeviceInfo.js
+index 4ef344a..363639e 100644
+--- a/node_modules/react-native/src/private/specs_DEPRECATED/modules/NativeDeviceInfo.js
++++ b/node_modules/react-native/src/private/specs_DEPRECATED/modules/NativeDeviceInfo.js
+@@ -47,12 +47,36 @@ export interface Spec extends TurboModule {
+ const NativeModule: Spec = TurboModuleRegistry.getEnforcing<Spec>('DeviceInfo');
+ let constants: ?DeviceInfoConstants = null;
+ 
++// Placeholder until RCTDeviceInfo.initialize() populates native constants (Old Arch timing).
++const FALLBACK_DIMENSIONS: DimensionsPayload = {
++  window: {width: 390, height: 844, scale: 3, fontScale: 1},
++  screen: {width: 390, height: 844, scale: 3, fontScale: 1},
++};
++
++function hasWindowDimensions(dims: ?DimensionsPayload): boolean {
++  if (dims == null) {
++    return false;
++  }
++  return (
++    dims.window != null ||
++    dims['window'] != null ||
++    dims.windowPhysicalPixels != null ||
++    dims['windowPhysicalPixels'] != null
++  );
++}
++
+ const NativeDeviceInfo = {
+   getConstants(): DeviceInfoConstants {
+-    if (constants == null) {
+-      constants = NativeModule.getConstants();
++    if (constants == null || !hasWindowDimensions(constants.Dimensions)) {
++      const next = NativeModule.getConstants();
++      if (hasWindowDimensions(next?.Dimensions)) {
++        constants = next;
++      }
++    }
++    if (constants != null && hasWindowDimensions(constants.Dimensions)) {
++      return constants;
+     }
+-    return constants;
++    return {Dimensions: FALLBACK_DIMENSIONS};
+   },
+ };
+ 

@@ -1,0 +1,43 @@
+{
+  "name": "flipper-integration-example-bare-new-arch",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "android": "react-native run-android",
+    "ios": "react-native run-ios",
+    "start": "react-native start",
+    "start:reset": "react-native start --reset-cache",
+    "typecheck": "tsc --noEmit",
+    "android:build": "cd android && ./gradlew assembleDebug -PreactNativeArchitectures=x86_64",
+    "android:install": "cd android && ./gradlew installDebug -PreactNativeArchitectures=x86_64",
+    "ios:pod-install": "cd ios && pod install",
+    "bundle:android": "mkdir -p android/app/src/main/assets && react-native bundle --platform android --dev true --entry-file index.js --bundle-output android/app/src/main/assets/index.android.bundle --assets-dest android/app/src/main/res",
+    "android:clean:build": "rm -rf ./android/build ./android/app/.cxx ./android/app/build",
+    "android:clean": "npm run android:clean:build && cd android && ./gradlew --stop && ./gradlew clean && ./gradlew generateCodegenArtifactsFromSchema --rerun-tasks",
+    "e2e": "maestro test .maestro"
+  },
+  "dependencies": {
+    "@op-engineering/op-sqlite": "^17.1.1",
+    "@react-native-async-storage/async-storage": "^3.1.1",
+    "react": "19.2.3",
+    "react-native": "0.85.0",
+    "react-native-default-preference": "^1.4.4",
+    "react-native-flipper-kit": "file:../..",
+    "react-native-safe-area-context": "^5.5.2"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.25.2",
+    "@babel/runtime": "^7.25.0",
+    "@react-native-community/cli": "20.1.0",
+    "@react-native-community/cli-platform-android": "20.1.0",
+    "@react-native-community/cli-platform-ios": "20.1.0",
+    "@react-native/babel-preset": "0.85.0",
+    "@react-native/metro-config": "0.85.0",
+    "@react-native/typescript-config": "0.85.0",
+    "@types/react": "^19.2.0",
+    "typescript": "^5.8.0"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
