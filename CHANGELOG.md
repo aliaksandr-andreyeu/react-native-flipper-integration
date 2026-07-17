@@ -40,6 +40,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Aligned the vestigial `expo.name` in `package.json` (`react-native-flipper-integration` → `react-native-flipper-kit`).
 - Dependabot now watches `examples/bare-new-arch` (the reference example) and groups minor/patch updates into a single weekly PR (root, that example, and GitHub Actions). `react`/`react-native` remain manually managed (documented in the config).
 - Consolidated the working audit/planning docs into [docs/ANALYSIS.md](docs/ANALYSIS.md) (with the deferred old-arch-iOS fix plan in [docs/prebuilt-flipperkit-xcframework.md](docs/prebuilt-flipperkit-xcframework.md)); removed the ad-hoc `OPUS.md` / `FABLE.md` / `PLAN.CURSOR.md` from the repo root.
+- **CI simplified:** the required PR gate is now a single fast JS job (`ci.yml`: format / lint / typecheck / test / build / lockfile-lint, ~1-2 min on ubuntu). The heavy native checks (Android gradle + Robolectric + APK, iOS macOS host test + podspec lint) moved to a separate on-demand `native.yml` — run manually (`workflow_dispatch`) or automatically only when native paths change — and are no longer required to merge. `dependency-review` runs on PRs but is advisory (not required).
 
 ### Fixed
 
