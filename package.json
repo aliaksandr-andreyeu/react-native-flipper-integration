@@ -94,7 +94,7 @@
     "react": "19.2.3",
     "react-native": "0.85.0",
     "typescript": "^5.8.0",
-    "typescript-eslint": "^8.65.0"
+    "typescript-eslint": "^8.66.0"
   },
   "codegenConfig": {
     "name": "RNFlipperKitSpec",
