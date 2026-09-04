@@ -80,7 +80,7 @@
     "@react-native/babel-preset": "0.87.0",
     "@types/jest": "^30.0.0",
     "@types/react": "^19.0.0",
-    "babel-jest": "^30.0.0",
+    "babel-jest": "^30.5.1",
     "eslint": "^9.39.5",
     "eslint-config-prettier": "^10.1.0",
     "eslint-plugin-react": "^7.37.0",
